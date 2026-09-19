@@ -39,7 +39,11 @@ def test_round_trip_through_pyemu_keeps_tables_and_reports_the_rest():
         q = from_pyemu(to_pyemu(p))
     d = compare(p, q)
     # the tables come back intact ...
-    assert d.par.empty and d.obs.empty and d.prior.empty and d.pestpp.empty and d.io.empty and d.cmd.empty
+    assert d.par.empty and d.obs.empty and d.prior.empty and d.pestpp.empty and d.cmd.empty
+    # ... and so do the template / instruction pairs, up to the path separator: pyEMU rewrites
+    # Windows-style paths with the host's separator, so on Linux PEST\a.tpl comes back as PEST/a.tpl
+    norm = lambda pairs: [(a.replace('\\', '/'), b.replace('\\', '/')) for a, b in pairs]   # noqa: E731
+    assert norm(q.tpl) == norm(p.tpl) and norm(q.ins) == norm(p.ins)
     assert d.pargp[d.pargp['column'].isin(['INCTYP', 'DERINC', 'FORCEN'])].empty      # only split-* defaults added
     # ... what pyEMU's model does not carry is exactly what the README says
     ctl = d.control.set_index('NAME')
