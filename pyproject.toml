@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "makepst"
-dynamic = ["version"]
+version = "0.1.0"
 description = "Build PEST / PEST++ / PEST_HP control files from spreadsheet tables, read them back, and push results into the workbook"
 readme = "README.md"
 license = {text = "MIT"}
@@ -41,9 +41,6 @@ makepst = "makepst.cli:main"
 
 [tool.setuptools]
 packages = ["makepst"]
-
-[tool.setuptools.dynamic]
-version = {attr = "makepst.__version__"}
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

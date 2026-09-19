@@ -1,4 +1,4 @@
-# makepst
+# makePst
 
 [![tests](https://github.com/ougx/makePst/actions/workflows/tests.yml/badge.svg)](https://github.com/ougx/makePst/actions/workflows/tests.yml)
 

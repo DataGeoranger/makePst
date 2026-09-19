@@ -1,5 +1,9 @@
 """Build, read and round-trip PEST control files from spreadsheet tables."""
-__version__ = '0.1.0'
+try:                                        # the installed package's metadata (pyproject.toml is the source)
+    from importlib.metadata import version as _dist_version
+    __version__ = _dist_version('makepst')
+except Exception:                           # a checkout run without installing
+    __version__ = '0.1.0'
 
 from .excel import load_table, to_workbook, update_workbook
 from .provenance import Manifest
