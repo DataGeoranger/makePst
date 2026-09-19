@@ -1,0 +1,5 @@
+PARNME,PARTRANS,PARCHGLIM,PARVAL1,PARLBND,PARUBND,PARGP,SCALE,OFFSET,DERCOM,TIETO,PRIOR,WEIGHT
+hk1,log,factor,10,0.1,1000,hk,1,0,1,,25,1
+hk2,log,factor,20,0.1,1000,hk,1,0,1,,hk1,1
+hk3,tied,factor,10,0.1,1000,hk,1,0,1,hk1,,
+rch,none,relative,0.001,0.0001,0.01,rch,1,0,1,,,

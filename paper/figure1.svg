@@ -1,0 +1,93 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="560" viewBox="0 0 1080 560" font-family="Helvetica, Arial, sans-serif" font-size="15">
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L10,5 L0,10 z" fill="#222"/>
+    </marker>
+  </defs>
+  <style>
+    .box { fill: #fff; stroke: #222; stroke-width: 1.6; }
+    .hub { fill: #e8e8e8; stroke: #222; stroke-width: 2; }
+    .file { fill: #f7f7f7; stroke: #555; stroke-width: 1.2; stroke-dasharray: 5 3; }
+    .t { fill: #111; }
+    .h { fill: #111; font-weight: bold; font-size: 16px; }
+    .c { fill: #111; font-family: Menlo, Consolas, monospace; font-size: 13.5px; }
+    .s { fill: #444; font-size: 12.5px; }
+    .a { stroke: #222; stroke-width: 1.6; fill: none; marker-end: url(#arrow); }
+    .a2 { stroke: #222; stroke-width: 1.6; fill: none; marker-end: url(#arrow); marker-start: url(#arrow); }
+  </style>
+
+  <!-- Workbook -->
+  <rect x="40" y="150" width="230" height="170" rx="8" class="box"/>
+  <text x="155" y="180" text-anchor="middle" class="h">Calibration workbook</text>
+  <text x="155" y="203" text-anchor="middle" class="s">Excel (.xlsm) or CSV tables</text>
+  <text x="60" y="230" class="s">CONTROL · PARGP · PAR_* · OBS_*</text>
+  <text x="60" y="250" class="s">PRIOR · IO · PP · NOTES · BUILD</text>
+  <text x="60" y="275" class="s">weights as formulas, helper columns,</text>
+  <text x="60" y="293" class="s">run history — the reviewed record</text>
+
+  <!-- Pst hub -->
+  <rect x="405" y="175" width="190" height="120" rx="60" class="hub"/>
+  <text x="500" y="215" text-anchor="middle" class="h">Pst</text>
+  <text x="500" y="238" text-anchor="middle" class="s">tables + control values</text>
+  <text x="500" y="256" text-anchor="middle" class="s">validate() on every write</text>
+
+  <!-- Control file -->
+  <rect x="730" y="150" width="230" height="170" rx="8" class="box"/>
+  <text x="845" y="180" text-anchor="middle" class="h">PEST control file</text>
+  <text x="845" y="203" text-anchor="middle" class="s">classic or PEST++ version 2</text>
+  <text x="750" y="230" class="s">PEST · PEST_HP · PEST++</text>
+  <text x="750" y="250" class="s">counts computed, priors generated,</text>
+  <text x="750" y="270" class="s">++ options and PEST_HP tokens kept</text>
+  <text x="750" y="293" class="s">+ <tspan class="c">.manifest.json</tspan> (hashes, command)</text>
+
+  <!-- build / dump arrows -->
+  <path d="M270,215 L405,215" class="a"/>
+  <text x="337" y="206" text-anchor="middle" class="c">build</text>
+  <path d="M405,255 L270,255" class="a"/>
+  <text x="337" y="275" text-anchor="middle" class="c">dump</text>
+  <path d="M595,215 L730,215" class="a"/>
+  <text x="662" y="206" text-anchor="middle" class="c">write</text>
+  <path d="M730,255 L595,255" class="a"/>
+  <text x="662" y="275" text-anchor="middle" class="c">read</text>
+
+  <!-- diff -->
+  <path d="M155,150 C155,100 845,100 845,150" class="a2"/>
+  <text x="500" y="72" text-anchor="middle" class="c">diff</text>
+  <text x="500" y="90" text-anchor="middle" class="s">what changed between any two (file or workbook), to a tolerance</text>
+
+  <!-- tpl/ins/output files and validate -->
+  <rect x="405" y="360" width="190" height="80" rx="8" class="file"/>
+  <text x="500" y="386" text-anchor="middle" class="h">Model interface</text>
+  <text x="500" y="406" text-anchor="middle" class="s">.tpl · .ins · model output</text>
+  <text x="500" y="424" text-anchor="middle" class="s">names cross-checked</text>
+  <path d="M500,295 L500,360" class="a2"/>
+  <text x="530" y="332" class="c">validate</text>
+  <text x="530" y="349" class="s">pestchek-style report</text>
+
+  <!-- PEST run and results -->
+  <rect x="730" y="360" width="230" height="80" rx="8" class="file"/>
+  <text x="845" y="386" text-anchor="middle" class="h">PEST / PEST++ run</text>
+  <text x="845" y="406" text-anchor="middle" class="s">.par · .res / .rei</text>
+  <text x="845" y="424" text-anchor="middle" class="s">IES par.csv · obs.csv · phi.actual.csv</text>
+  <path d="M800,320 L800,360" class="a"/>
+  <text x="790" y="345" text-anchor="end" class="s">run</text>
+
+  <!-- update: results back to workbook -->
+  <path d="M730,400 C520,470 300,470 155,320" class="a"/>
+  <text x="440" y="492" text-anchor="middle" class="c">update</text>
+  <text x="440" y="510" text-anchor="middle" class="s">by name across sheets; formulas left alone; PHI sheet</text>
+
+  <!-- parrep -->
+  <path d="M925,360 L925,320" class="a" stroke-dasharray="6 4"/>
+  <text x="935" y="333" class="c">parrep</text>
+  <text x="935" y="349" class="s">values back into</text>
+  <text x="935" y="364" class="s">a new control file</text>
+
+  <!-- init -->
+  <text x="40" y="360" class="c">init</text>
+  <text x="40" y="378" class="s">starter workbook with headers,</text>
+  <text x="40" y="394" class="s">defaults, drop-downs, BUILD sheet</text>
+  <path d="M75,345 L120,322" class="a"/>
+
+  <text x="40" y="540" class="s">Figure 1. The makepst workflow: the workbook and the control file are two views of one Pst object; every produced file carries a provenance manifest.</text>
+</svg>

@@ -1,0 +1,5 @@
+OBSNME,OBSVAL,WEIGHT,OBGNME
+h_w1,101.2,1.0,head
+h_w2,98.7,1.0,head
+h_w3,95.0,0.0,head
+q_gauge,1250,0.01,flow

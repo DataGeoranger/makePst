@@ -1,0 +1,3 @@
+PARGPNME,INCTYP,DERINC,DERINCLB,FORCEN,DERINCMUL,DERMTHD
+hk,relative,0.01,0,switch,2,parabolic
+rch,absolute,0.001,0,switch,2,parabolic

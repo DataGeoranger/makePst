@@ -1,0 +1,5 @@
+LINE,NAME,DEFAULT,VALUE
+control,noptmax,5,10
+control,rlambda1,10,20
+control,lamforgive,,lamforgive
+svd,maxsing,10000,3

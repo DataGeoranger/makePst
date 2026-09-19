@@ -1,0 +1,70 @@
+pcf
+# demo01 synthetic fixture
+# demo02 second history line
+* control data
+restart    regularisation
+11         6          3          6          7                                     # npar nobs npargp nprior nobsgp [maxcompdim] [derzerolim]
+3          2          double     point      1          0          0
+20         2          0.3        0.03       10         999        lamforgive win_mrun_hours=1.5 uptestmin=70
+3          3          0.001      absparmax(1)=0.1 absparmax(2)=20
+0.1        noaui
+10         0.01       4          4          0.005      4          0.5        1          -1  # noptmax phiredstp nphistp nphinored relparstp nrelpar [phistopthresh] [lastrun] [phiabandon]
+1          1          1          1          jcosave    verboserec parsaveitn rrfsave
+* singular value decomposition
+2
+50         5e-07
+0
+* parameter groups
+hk   relative   0.1  0  always_2  2  parabolic
+sy   relative   0.1  0  always_2  2  parabolic
+rch  absolute  0.01  0  always_2  2  parabolic
+* parameter data
+hk1_cc01  log    factor          49.73775      1   300  hk   1      0  1
+hk1_cc02  tied   factor          90.26792      1   300  hk   1      0  1
+hk1_cc03  log    factor          123.8187      1   300  hk   1      0  1
+hk1_cc04  fixed  factor       0.001007841  1e-05   0.9  hk   1      0  1
+hk1_cc05  fixed  factor                 5      1   300  hk   1      0  1
+hk1_cc06  log    factor               7.5      1   300  hk   1      0  1
+sy1_cc01  log    factor              0.15   0.01  0.35  sy   1      0  1
+sy1_cc02  log    factor              0.12   0.01  0.35  sy   1      0  1
+rchss     none   absolute(1)    0.3428223   0.08     1  rch  1      0  1
+rch2002   log    factor              0.87    0.5   1.5  rch  1      0  1
+dg00025   none   absolute(2)         1000    900  1100  rch  1  -1000  1
+hk1_cc02  hk1_cc01
+* observation groups
+head
+headss
+qbs
+lhss
+regulhk
+regulsy
+regulrch
+* observation data
+mr1158636_197611      2542.59   0.15  head
+mr1158636_197705      2542.19   0.15  head
+mr1322063_000000  2865.475129      0  headss
+mr1332090_000000         -999      0  headss
+qbs_2010          1234567.891  1e-06  qbs
+lhss202211            2727.77    0.2  lhss
+* model command line
+00_RunModel.bat
+* model input/output
+PEST\pphk.tpl  ppl\pphk.csv
+PEST\ppsy.tpl  ppl\ppsy.csv
+PEST\rch.tpl   RCH\rch.csv
+PEST\head.ins  TR\Output.head
+PEST\flow.ins  TR\Output.flow
+* prior information
+hk1_cc01  1.0 * log(hk1_cc01) - 1.0 * log(hk1_cc03) = 0   2  regulhk
+hk1_cc03  1.0 * log(hk1_cc03) = 2                         1  regulhk
+sy1_cc01  1.0 * log(sy1_cc01) - 1.0 * log(sy1_cc02) = 0   1  regulsy
+sy1_cc02  1.0 * log(sy1_cc02) = -0.69897000434            1  regulsy
+rchss     1.0 * rchss = 0.35                             10  regulrch
+rch2002   1.0 * log(rch2002) = 0                          5  regulrch
+* regularisation
+5          5.25       0.3
+0.5        1e-15      1e+15
+1.3        0.001      1
+++overdue_resched_fac(3)
+++lambdas(0.1,1,10,100)
+++max_run_fail(2)

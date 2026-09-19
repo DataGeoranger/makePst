@@ -1,0 +1,5 @@
+TYPE,IN,OUT
+cmd,python model.py,
+tpl,model.tpl,model.in
+ins,heads.ins,heads.out
+ins,flow.ins,flow.out

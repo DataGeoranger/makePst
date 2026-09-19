@@ -1,0 +1,31 @@
+# model / calibration data lives next to the code but is not part of the package
+*.xlsm
+*.xlsx
+*.pst
+*.par
+*.res
+*.rei
+*.tpl
+*.ins
+*.jco
+*.rec
+!tests/data/*
+
+# the pre-package single-file script
+makePst .py
+
+__pycache__/
+*.py[cod]
+build/
+dist/
+*.egg-info/
+.pytest_cache/
+.venv/
+.pytest_tmp_*/
+
+# tutorial inputs are committed although these extensions are otherwise generated files
+!examples/minimal/model.par
+!examples/minimal/model.res
+*.manifest.json
+!examples/minimal/*.tpl
+!examples/minimal/*.ins

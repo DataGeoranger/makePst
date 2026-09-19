@@ -1,0 +1,19 @@
+cff-version: 1.2.0
+message: "If you use makepst, please cite it as below."
+title: "makepst: PEST control files from spreadsheet tables, and back"
+type: software
+authors:
+  - family-names: Ou
+    given-names: Michael
+    email: ougengxin@gmail.com
+version: 0.1.0
+date-released: 2026-09-19
+repository-code: "https://github.com/ougx/makePst"
+license: MIT
+keywords:
+  - PEST
+  - PEST++
+  - PEST_HP
+  - groundwater
+  - calibration
+  - Excel
