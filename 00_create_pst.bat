@@ -1,5 +1,5 @@
 @echo off
-set "py=%~dp0makePst.py"
+set "py=%~dp0makepst.py"
 if not exist "%py%" set "py=c:\Cloud\Dropbox\PythonScripts\a0_util\makePst.py"
 if not exist "%py%" set "py=p:\MichaelOu\createPst\create_pst.py"
 echo %py%

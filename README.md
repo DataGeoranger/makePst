@@ -4,7 +4,7 @@
 
 *makePst: A Reproducible and Auditable Spreadsheet Workflow for PEST Model Calibration*
 
-`makepst` builds PEST / PEST_HP / PEST++ control files (`.pst`) from Excel or CSV tables,
+`makePst` builds PEST / PEST_HP / PEST++ control files (`.pst`) from Excel or CSV tables,
 reads control files back into editable workbooks, and returns calibration results
 (`.par`, `.res`/`.rei`, PESTPP-IES ensembles) into the workbook you already maintain.
 
@@ -21,7 +21,7 @@ two .pst / workbooks                   ->  what changed      makepst diff
 See [What round-tripping preserves](#what-round-tripping-preserves) for the exact guarantees
 and the [compatibility table](#compatibility) for which PEST dialects and sections are covered.
 
-## Why makepst?
+## Why makePst?
 
 A PEST setup of a few thousand parameters and tens of thousands of observations is easier to
 review in a spreadsheet than in a 40,000-line text file. In practice most calibration teams
@@ -29,7 +29,7 @@ already keep one: the workbook holds the parameter tables per group, weights com
 formulas, helper columns (layer, pilot-point index, native values), and a run history. The
 control file is derived from it.
 
-`makepst` makes that derivation deterministic and safe:
+`makePst` makes that derivation deterministic and safe:
 
 - **The workbook is the source of truth.** The control file is rebuilt from it with one
   command; the build command itself can live in the workbook (`BUILD` sheet).
@@ -57,7 +57,7 @@ pip install "makepst[pyemu] @ git+https://github.com/ougx/makePst"   # + pyEMU (
 ```
 
 Requires Python ≥ 3.9, pandas ≥ 2.0, numpy, openpyxl ≥ 3.1. Installing adds the `makepst`
-command; `python -m makepst` is equivalent, and `python makePst.py` works from a checkout
+command; `python -m makepst` is equivalent, and `python makepst.py` works from a checkout
 without installing.
 
 ## Starting from nothing
@@ -266,7 +266,7 @@ analysis` and `* pareto`.
 
 Normalised: parameter, observation and group names are lower-cased (PEST is
 case-insensitive); numbers are written with 11 significant digits; whitespace and column
-alignment are makepst's own; comments *inside* sections are dropped; observation groups are
+alignment are makePst's own; comments *inside* sections are dropped; observation groups are
 listed in first-use order (or the order of the source file when reading a `.pst`).
 
 Also preserved: covariance-file references in `* observation groups` (an `OBSGP` sheet on
@@ -327,7 +327,7 @@ makepst validate tr13.xlsm            # a workbook with a BUILD sheet is built f
 | malformed prior equation; non-numeric right-hand side; `log()` used on a non-log parameter or vice versa | error |
 | `DERCOM` beyond the number of model command lines | error |
 | name longer than PEST's limit (12 parameter / 20 observation / 12 group; PEST++ allows 200) | warning |
-| section in the `.pst` that makepst drops on read | warning |
+| section in the `.pst` that makePst drops on read | warning |
 | template or instruction file missing; bad `ptf` / `pif` line | error |
 | parameter cited in no template; template citing an unknown parameter | error |
 | observation read by no instruction file, by two files, or twice in one; unknown observation in an instruction file | error |
@@ -380,10 +380,10 @@ the signal that the control file no longer corresponds to the spreadsheet.
 
 [pyEMU](https://github.com/pypest/pyemu) is the broader toolkit: it constructs PEST++
 interfaces programmatically (`PstFrom`), runs linear and ensemble-based uncertainty
-analysis, and provides geostatistics. `makepst` does one thing pyEMU does not: it treats a
-spreadsheet the modeller already maintains as the source of a control file and keeps the two
+analysis, and provides geostatistics. `makePst` does one thing pyEMU does not: it treats a
+spreadsheet the modeler already maintains as the source of a control file and keeps the two
 in sync in both directions, including PEST_HP keywords that pyEMU's control-data model does
-not carry. They are complementary — a control file written by `makepst` loads in pyEMU, and
+not carry. They are complementary — a control file written by `makePst` loads in pyEMU, and
 pyEMU's outputs (`.par`, `.res`, ensembles) load into `makepst update`.
 
 There is a direct bridge (the `pyemu` extra):
@@ -392,7 +392,7 @@ There is a direct bridge (the `pyemu` extra):
 from makepst import read_pst, to_pyemu, from_pyemu
 
 ppst = to_pyemu(read_pst('tr13.pst'))      # a pyemu.Pst: use pyEMU's Schur, ensembles, plotting, ...
-pst = from_pyemu(ppst)                     # back to a makepst Pst, e.g. to dump into a workbook
+pst = from_pyemu(ppst)                     # back to a makePst Pst, e.g. to dump into a workbook
 ```
 
 Both directions go through a temporary classic control file, so they depend only on the file
@@ -438,7 +438,7 @@ everything on Linux and Windows.
 ## Project layout
 
 ```
-makePst.py          entry point for a checkout (same arguments as `makepst`)
+makepst.py          entry point for a checkout (same arguments as `makepst`)
 makepst/
   sections.py       control-style sections: field order, defaults, PEST_HP keyed tokens; one table drives render and parse
   pst.py            Pst data model and validate(); .par / .res / ensemble readers
@@ -459,7 +459,7 @@ tests/              suite + fixture generator
 ## Contributing, issues, citation
 
 Bug reports and feature requests: [GitHub issues](https://github.com/ougx/makePst/issues).
-A control file that `makepst` misreads, plus the command used, is the most useful report.
+A control file that `makePst` misreads, plus the command used, is the most useful report.
 Pull requests should keep `python -m pytest tests -q` green and regenerate the fixture with
 `python tests/make_fixture.py` when the writer's output changes.
 
