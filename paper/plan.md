@@ -21,7 +21,7 @@ The proposed title is:
 
 > **makePst: A Reproducible Spreadsheet Workflow for PEST Model Calibration**
 
-The manuscript would follow the Technology Spotlight format: no abstract, approximately 2,300 words, one or two figures, and no more than five references. The source code, automated tests, and documentation are publicly available at [github.com/ougx/makePst](https://github.com/ougx/makePst). A small reproducible example and a versioned, archived software release with a DOI would accompany the manuscript. Known format limitations would be stated explicitly.
+The manuscript would follow the Technology Spotlight format: no abstract, approximately 2,300 words, one or two figures, and no more than five references. The source code, automated tests, and documentation are publicly available at [github.com/ougx/makePst](https://github.com/ougx/makePst). A small reproducible example and a tagged software release would accompany the manuscript. Known format limitations would be stated explicitly.
 
 Would this topic be appropriate for consideration as a Technology Spotlight article in *Groundwater*?
 
@@ -146,7 +146,7 @@ ougengxin@gmail.com
 
 ### Software and Data Availability
 
-> makePst version **[version]** is available under the MIT License at [https://github.com/ougx/makePst](https://github.com/ougx/makePst). The archived version used in this article is available at **[DOI]**. A compact reproducible example and the commands used to generate the reported results are provided at **[example/archive URL]**. The larger groundwater project data are **[publicly available at ... / unavailable because ..., with a synthetic example supplied instead]**.
+> makePst version **[version]** is available under the MIT License at [https://github.com/ougx/makePst](https://github.com/ougx/makePst). The release used in this article is tagged **[version]** in that repository. A compact reproducible example and the commands used to generate the reported results are provided at **[example/archive URL]**. The larger groundwater project data are **[publicly available at ... / unavailable because ..., with a synthetic example supplied instead]**.
 
 ### Acknowledgments
 
@@ -164,14 +164,14 @@ Select only references actually used in the final text:
 1. A primary PEST or PEST++ reference.
 2. The primary pyEMU paper or current software citation.
 3. A reference on highly parameterized groundwater model calibration or regularization.
-4. The archived makePst software release and DOI.
+4. The tagged makePst software release.
 5. One directly relevant groundwater software-workflow reference, if needed.
 
 ### Pre-Submission Checklist
 
 - [ ] Add external `pestchek` validation to the example workflow.
 - [ ] Publish a versioned release.
-- [ ] Archive that release and obtain a DOI.
+- [ ] Tag that release on GitHub (and publish to PyPI).
 - [ ] Provide a small public example with expected outputs.
 - [ ] Confirm the repository and installation instructions from a clean environment.
 - [ ] Document supported features and round-trip limitations.

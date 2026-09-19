@@ -300,7 +300,9 @@ class Pst:
             auto = self._auto_prior()
             self._auto_labels = set(auto['PINME'])
             prior.append(auto)
-        prior = pd.concat(prior, ignore_index=True)
+        # skip empty frames: pandas 2.x warns that they will stop influencing result dtypes
+        prior = [df for df in prior if len(df)]
+        prior = pd.concat(prior, ignore_index=True) if prior else _empty(PRIOR_COLS)
         dup = prior['PINME'][prior['PINME'].duplicated()].unique()
         if len(dup):
             raise ValueError(f'duplicate prior information labels: {list(dup[:10])}')
