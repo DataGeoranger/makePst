@@ -1,0 +1,4 @@
+include LICENSE README.md CHANGELOG.md CITATION.cff
+recursive-include tests *.py *.xlsx *.pst *.par *.res *.csv
+recursive-include examples *.csv *.py *.tpl *.ins *.in *.out *.par *.res
+global-exclude __pycache__ *.py[cod] *.manifest.json

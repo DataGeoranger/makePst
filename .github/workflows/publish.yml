@@ -1,0 +1,52 @@
+name: publish
+
+# Publishes to PyPI through trusted publishing (OIDC): no API token is stored anywhere.
+# Triggered by pushing a version tag, e.g.  git tag v0.2.0 && git push origin v0.2.0
+# One-time setup on pypi.org -> project makepst -> Publishing: owner ougx, repository makePst,
+# workflow publish.yml, environment pypi.
+
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Check that the tag matches the package version
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          version=$(python -c "import re; print(re.search(r'^version\s*=\s*\"([^\"]+)\"', open('pyproject.toml').read(), re.M).group(1))")
+          if [ "$tag" != "$version" ]; then echo "tag $tag != pyproject version $version"; exit 1; fi
+      - run: python -m pip install -e .[test,pyemu]
+      - run: python -m pytest tests -q
+      - run: python -m pip install build twine
+      - run: python -m build
+      - run: python -m twine check dist/*
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    needs: build
+    runs-on: ubuntu-24.04
+    environment: pypi
+    permissions:
+      id-token: write          # the OIDC token PyPI trusts
+      contents: write          # to attach the files to a GitHub release
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
+      - name: GitHub release with the distribution files
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true

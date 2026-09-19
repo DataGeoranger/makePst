@@ -9,13 +9,13 @@ reads control files back into editable workbooks, and returns calibration result
 (`.par`, `.res`/`.rei`, PESTPP-IES ensembles) into the workbook you already maintain.
 
 ```
-(nothing)                              ->  starter workbook  makepst init
-.pst or workbook + tpl/ins files        ->  pestchek-style report  makepst validate
-Excel / CSV tables                     ->  .pst              makepst build
-.pst                                   ->  editable workbook makepst dump
-.par / .res / .rei / IES ensemble      ->  existing workbook makepst update
-.par or IES realization (+ tweaks)     ->  new .pst          makepst parrep
-two .pst / workbooks                   ->  what changed      makepst diff
+(nothing)                              ->  starter workbook       makepst init
+.pst or workbook + tpl/ins files       ->  pestchek-style report  makepst validate
+Excel / CSV tables                     ->  .pst                   makepst build
+.pst                                   ->  editable workbook      makepst dump
+.par / .res / .rei / IES ensemble      ->  existing workbook      makepst update
+.par or IES realization (+ tweaks)     ->  new .pst               makepst parrep
+two .pst / workbooks                   ->  what changed           makepst diff
 ```
 
 See [What round-tripping preserves](#what-round-tripping-preserves) for the exact guarantees
@@ -48,13 +48,13 @@ control file is derived from it.
 
 ## Install
 
-Not on PyPI yet. Until the first release:
+```
+pip install makepst                 # adds the makepst command
+pip install "makepst[excel]"        # + xlwings, for Excel-faithful workbook updates (see update)
+pip install "makepst[pyemu]"        # + pyEMU, for to_pyemu / from_pyemu (see the bridge)
+```
 
-```
-pip install git+https://github.com/ougx/makePst
-pip install "makepst[excel] @ git+https://github.com/ougx/makePst"   # + xlwings (see update)
-pip install "makepst[pyemu] @ git+https://github.com/ougx/makePst"   # + pyEMU (see the bridge)
-```
+The development version: `pip install git+https://github.com/ougx/makePst`.
 
 Requires Python ≥ 3.9, pandas ≥ 2.0, numpy, openpyxl ≥ 3.1. Installing adds the `makepst`
 command; `python -m makepst` is equivalent, and `python makepst.py` works from a checkout
@@ -289,7 +289,7 @@ Not preserved: any unrecognised section (dropped with a warning naming it).
 | Result files | `.par`, `.res` / `.rei`, PESTPP-IES `case.N.par.csv` / `case.N.obs.csv` / `case.phi.actual.csv` |
 | Table inputs | `.xlsx` / `.xlsm` sheets (openpyxl), `.csv` |
 | Workbook update | openpyxl backend on any platform (macros kept, charts/images dropped, no recalculation); xlwings backend on Windows/macOS with Excel (everything kept, recalculated) |
-| Platforms | CI runs the suite on Linux and Windows for Python 3.9, 3.11 and 3.13. macOS is expected to work but is not exercised in CI. |
+| Platforms | CI runs the suite on Ubuntu 24.04 and Windows Server 2022 for Python 3.9, 3.11 and 3.13. macOS is expected to work but is not exercised in CI. |
 | Python | ≥ 3.9; pandas ≥ 2.0 (tested with 2.3 and 3.0), numpy, openpyxl ≥ 3.1; optional xlwings, pyemu, pytest |
 
 ## Validation
@@ -456,6 +456,20 @@ examples/minimal/   the tutorial inputs
 tests/              suite + fixture generator
 ```
 
+## Releasing
+
+Releases are published to PyPI by GitHub Actions through trusted publishing, so no token is
+stored anywhere. To release: bump the version in `pyproject.toml` and the fallback in
+`makepst/__init__.py` (a test keeps them equal), add a `CHANGELOG.md` entry, commit, then
+
+```
+git tag v0.2.0 && git push origin main v0.2.0
+```
+
+The `publish` workflow checks that the tag matches the package version, runs the tests, builds
+the sdist and wheel, uploads them to PyPI, and attaches them to a GitHub release. PyPI never
+accepts the same version twice, so a mistake means a new version, not a re-upload.
+
 ## Contributing, issues, citation
 
 Bug reports and feature requests: [GitHub issues](https://github.com/ougx/makePst/issues).
@@ -464,6 +478,6 @@ Pull requests should keep `python -m pytest tests -q` green and regenerate the f
 `python tests/make_fixture.py` when the writer's output changes.
 
 Changes are listed in [CHANGELOG.md](CHANGELOG.md). To cite, use [CITATION.cff](CITATION.cff)
-(GitHub's "Cite this repository" button); a DOI will be added with the first release.
+(GitHub's "Cite this repository" button).
 
 License: MIT.
