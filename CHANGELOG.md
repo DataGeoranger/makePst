@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.2.0 (2026-09-19)
+
+- `update`: the xlwings backend reads only headers, name and target columns, writes contiguous
+  cells in one call per run, suspends events and calculation while writing and recalculates
+  once before saving (1,068 parameters over eight sheets of a 27-sheet workbook: ~9 s, was
+  minutes); `--par` with `--pst` no longer rewrites the observation sheets
+- `tempchek`: check a template file or write model input files from parameter values, with
+  PEST's number writer (maximum precision in the space, `PRECIS` / `DPOINT`, one word per
+  parameter, right-justified; checked against `tempchek.exe`); for a template + `.par` file
+  or for a whole case
+- `inschek`: check an instruction file or read a model output file with it into an `.obf`
+  file, for one file or a whole case
+- `validate`: values that cannot be written into their template space are errors; a line
+  advance not at the start of an instruction line and `t` / fixed instructions moving left
+  are errors (INSCHEK's rules); three more pestchek warnings (empty observation group,
+  `ICOV`/`ICOR`/`IEIG` with more than 300 adjustable parameters, PEST_HP-only variables —
+  the last as a note); an all-zero-weight observation group is now a note, not a warning
+- `update`: cells inside array formulas or dynamic-array spill ranges are left alone (Excel
+  refuses them; xlwings no longer shows a dialog); names present on only one side are reported
+  with counts and examples
+- `validate`: pestchek's rules added (parameter data, groups, observations, prior information,
+  ~60 control-variable ranges and consistency rules, template and instruction syntax), derived
+  from PEST 17's `pestchek.F` / `cheksub.F`; file paths resolved from the directory PEST runs
+  in, not only the control file's folder
+
 ## 0.1.0 (2026-09-19)
 
 First packaged release; replaces the single-file `makePst.py` script.

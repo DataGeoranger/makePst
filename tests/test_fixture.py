@@ -258,6 +258,14 @@ def test_update_cli_par_with_pst_groups(book_copy):
     assert _col(book_copy, 'OBS_HEAD', 'WEIGHT')[0] == pytest.approx(0.15)      # --pst obs not written: OBS_* excluded
 
 
+def test_update_cli_par_with_pst_does_not_write_observations(book_copy):
+    before = _col(book_copy, 'OBS_HEAD', 'WEIGHT')
+    main(['update', book_copy, '--par', os.path.join(DATA, 'demo.par'), '--pst', PST,
+          '--backend', 'openpyxl'])
+    assert _col(book_copy, 'OBS_HEAD', 'WEIGHT') == before
+    assert _col(book_copy, 'PAR_HK', 'PARVAL1')[0] == pytest.approx(49.73775 * 2)
+
+
 # ---------------------------------------------------------------------- PESTPP-IES ensembles
 PAR_CSV = os.path.join(DATA, 'demo.3.par.csv')
 OBS_CSV = os.path.join(DATA, 'demo.3.obs.csv')
@@ -407,3 +415,30 @@ def test_build_from_workbook_build_sheet(tmp_path, monkeypatch):
     shutil.copy(BOOK, tmp_path / 'demo.xlsx')
     main(['build', str(tmp_path / 'demo.xlsx'), '--no_manifest'])   # default: the name in the BUILD sheet, beside the workbook
     assert (tmp_path / 'demo.pst').read_text() == golden()
+
+
+# ---------------------------------------------------------------------- array formulas, unmatched names
+def test_update_leaves_array_formula_cells_alone(book_copy, capsys):
+    import openpyxl
+    from openpyxl.worksheet.formula import ArrayFormula
+    wb = openpyxl.load_workbook(book_copy)
+    ws = wb['PAR_SY']
+    ws['D2'] = ArrayFormula('D2:D3', '=IF({1;1}, 0.11, 0)')                   # PARVAL1 of sy1_cc01 / sy1_cc02
+    wb.save(book_copy)
+    upd = update_workbook(book_copy, par=os.path.join(DATA, 'demo.par'), backend='openpyxl')
+    assert upd['sheets']['PAR_SY'] == {'rows': 2, 'formula_cells_skipped': 1, 'cells_refused': 0}
+    assert 'PAR_SY: 2 rows matched, 1 formula cells left alone' in capsys.readouterr().out
+    assert _col(book_copy, 'PAR_HK', 'PARVAL1')[0] == pytest.approx(49.73775 * 2)   # the rest still updated
+    upd = update_workbook(book_copy, par=os.path.join(DATA, 'demo.par'), backend='openpyxl', overwrite_formulas=True)
+    assert upd['sheets']['PAR_SY']['cells_refused'] == 1                        # asked to, but Excel would refuse
+
+
+def test_update_reports_unmatched_names(book_copy):
+    par = pd.DataFrame({'PARNME': ['hk1_cc01', 'ghost_a', 'ghost_b'], 'PARVAL1': [1.0, 2.0, 3.0]})
+    with pytest.warns(UserWarning) as rec:
+        upd = update_workbook(book_copy, par=par, backend='openpyxl')
+    texts = [str(w.message) for w in rec]
+    assert any('2 parameters in the results have no row in the workbook' in t and 'ghost_a' in t for t in texts)
+    assert any('10 parameters in the workbook are not in the results' in t for t in texts)
+    assert upd['unmatched'] == {'parameters': {'not_in_workbook': 2, 'not_in_results': 10}}
+    assert _col(book_copy, 'PAR_HK', 'PARVAL1')[0] == 1.0

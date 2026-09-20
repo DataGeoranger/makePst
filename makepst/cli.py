@@ -1,5 +1,6 @@
 """Command line: build (Excel/CSV -> pst), dump (pst -> Excel), update (values -> existing workbook),
-parrep (.par values -> pst), init (starter workbook), validate (pestchek-style checks), diff (compare two)."""
+parrep (.par values -> pst), init (starter workbook), validate (pestchek-style checks), diff (compare two),
+tempchek (templates -> model input files), inschek (model output files -> observation values)."""
 import argparse
 import os
 import shlex
@@ -190,6 +191,25 @@ def parrep(args):
     _finish_pst(pst, args.out, manifest, dump_tpl=False, version=_version(args))
 
 
+def guess_base_dir(pst, target):
+    """The folder the control file's relative paths are meant from.
+
+    PEST resolves them from the directory it is run in, which is often the control file's
+    folder but just as often the model root with the control file in a subfolder. Try the
+    control file's folder, the current directory and the control file's parent, and take the
+    one in which the most template / instruction files exist (the control file's folder wins ties).
+    """
+    here = os.path.dirname(os.path.abspath(target))
+    candidates = [here, os.getcwd(), os.path.dirname(here)]
+    files = [f for f, _ in pst.tpl + pst.ins]
+    best, hits = here, -1
+    for base in dict.fromkeys(candidates):
+        n = sum(os.path.exists(os.path.join(base, f)) for f in files)
+        if n > hits:
+            best, hits = base, n
+    return best
+
+
 def validate(args):
     """pestchek-style report for a control file or a workbook (built via its BUILD sheet)."""
     from .checks import summary, validate as run_checks
@@ -200,8 +220,10 @@ def validate(args):
     else:
         pst = read_pst(target)
         pst_path = target
-    base = args.base_dir or os.path.dirname(os.path.abspath(target))
+    base = args.base_dir or guess_base_dir(pst, target)
     findings = run_checks(pst, base_dir=base, pst_path=pst_path, outputs=args.outputs)
+    if not args.base_dir and not args.quiet:
+        print(f'INFO    file paths resolved relative to {base} (override with --base_dir)')
     order = {'error': 0, 'warning': 1, 'info': 2}
     for f in sorted(findings, key=lambda f: order[f.severity]):
         if f.severity == 'info' and args.quiet:
@@ -218,6 +240,181 @@ def _load_target(path):
     if path.lower().endswith(WORKBOOK_EXT):
         return build_from_workbook(path)[0]
     return read_pst(path)
+
+
+def _is_case(path):
+    return path.lower().endswith(('.pst',) + WORKBOOK_EXT)
+
+
+def _report(nerr, nwarn, label):
+    print(f'{label}: {nerr} error{"s" if nerr != 1 else ""}, {nwarn} warning{"s" if nwarn != 1 else ""}')
+    if nerr:
+        raise SystemExit(1)
+
+
+def tempchek(args):
+    """TEMPCHEK: check a template file, or write model input files from parameter values.
+
+    makepst tempchek model.tpl                      check only, list the parameters
+    makepst tempchek model.tpl model.in [case.par]  write model.in (values from model.par by default)
+    makepst tempchek case.pst [--par FILE]          write every model input file of the case
+    """
+    from .checks import template_names, template_problems
+    from .model_files import fill_template, par_header, scaled_values
+    from .writer import effective_control
+    target, nerr, nwarn = args.target, 0, 0
+
+    if _is_case(target):
+        pst = _load_target(target)
+        base = args.base_dir or guess_base_dir(pst, target)
+        ctl = effective_control(pst)
+        precis, dpoint = ctl.get('precis', 'single'), ctl.get('dpoint', 'point')
+        par = pst.par.set_index('PARNME')[['PARVAL1', 'SCALE', 'OFFSET']].copy()
+        if args.par:
+            new = read_par(args.par, args.real)['PARVAL1']
+            missing = [n for n in par.index if n not in new.index]
+            if missing:
+                print(f'ERROR   {args.par}: no value for {len(missing)} parameters: {", ".join(missing[:6])}')
+                raise SystemExit(1)
+            par['PARVAL1'] = new.reindex(par.index)
+        values = scaled_values(par)
+        if not args.base_dir:
+            print(f'INFO    file paths resolved relative to {base} (override with --base_dir)')
+        for tpl, model_in in pst.tpl:
+            tpath = os.path.join(base, tpl)
+            problems = template_problems(tpath) if os.path.exists(tpath) else ['template file not found']
+            text = None
+            if not problems:
+                text, problems = fill_template(tpath, values, precis, dpoint)
+            for p in problems:
+                print(f'ERROR   {tpl}: {p}')
+            nerr += len(problems)
+            if text is not None:
+                if args.dry_run:
+                    print(f'OK      {tpl}: {model_in} can be written')
+                else:
+                    ipath = os.path.join(base, model_in)
+                    with open(ipath, 'w') as f:
+                        f.write(text)
+                    print(f'written {model_in} from {tpl}')
+        _report(nerr, nwarn, target)
+        return
+
+    tpl, modfile, parfile = target, args.modfile, args.parfile
+    problems = template_problems(tpl) if os.path.exists(tpl) else ['template file not found']
+    names = []
+    if not problems:
+        try:
+            names = list(dict.fromkeys(template_names(tpl)))
+        except ValueError as e:
+            problems = [str(e)]
+    for p in problems:
+        print(f'ERROR   {tpl}: {p}')
+    nerr += len(problems)
+    if nerr:
+        _report(nerr, nwarn, tpl)
+    if not names:
+        print(f'WARNING {tpl}: no parameters identified')
+        nwarn += 1
+    if modfile is None:
+        print(f'{len(names)} parameters identified in {tpl}: {" ".join(names)}')
+        _report(nerr, nwarn, tpl)
+        return
+    if parfile is None:
+        parfile = os.path.splitext(tpl)[0] + '.par'
+    if not os.path.exists(parfile):
+        print(f'ERROR   parameter value file {parfile} not found')
+        raise SystemExit(1)
+    precis, dpoint = par_header(parfile)
+    values = scaled_values(read_par(parfile, args.real))
+    for extra in sorted(set(values) - set(names)):
+        print(f'WARNING parameter "{extra}" from {parfile} not cited in {tpl}')
+        nwarn += 1
+    text, problems = fill_template(tpl, values, precis, dpoint)
+    for p in problems:
+        print(f'ERROR   {tpl}: {p}')
+    nerr += len(problems)
+    if text is not None:
+        with open(modfile, 'w') as f:
+            f.write(text)
+        print(f'written {modfile} from {tpl} with values from {parfile}')
+    _report(nerr, nwarn, tpl)
+
+
+def inschek(args):
+    """INSCHEK: check an instruction file, or read a model output file with it and write the values to an .obf file.
+
+    makepst inschek heads.ins                   check only, list the observations
+    makepst inschek heads.ins heads.out         write heads.obf
+    makepst inschek case.pst                    every instruction file of the case -> case.obf
+    """
+    from .checks import InstructionError, instruction_names, instruction_problems, run_instructions
+    from .model_files import write_obf
+    target, nerr, nwarn = args.target, 0, 0
+
+    if _is_case(target):
+        pst = _load_target(target)
+        base = args.base_dir or guess_base_dir(pst, target)
+        if not args.base_dir:
+            print(f'INFO    file paths resolved relative to {base} (override with --base_dir)')
+        values = {}
+        for ins, model_out in pst.ins:
+            ipath, opath = os.path.join(base, ins), os.path.join(base, model_out)
+            problems = instruction_problems(ipath) if os.path.exists(ipath) else ['instruction file not found']
+            if not problems and not os.path.exists(opath):
+                problems = [f'model output file {model_out} not found']
+            if not problems:
+                try:
+                    got = run_instructions(ipath, opath)
+                    values.update(got)
+                    print(f'read    {len(got)} observations from {model_out} with {ins}')
+                except InstructionError as e:
+                    problems = [f'reading {model_out} failed: {e}']
+            for p in problems:
+                print(f'ERROR   {ins}: {p}')
+            nerr += len(problems)
+        unread = [n for n in pst.obs['OBSNME'] if n not in values]
+        if unread:
+            print(f'WARNING {len(unread)} observations in the control file were not read: {", ".join(unread[:6])}')
+            nwarn += 1
+        out = args.out or os.path.splitext(target)[0] + '.obf'
+        write_obf(out, values)
+        print(f'written {out}: {len(values)} observation values')
+        _report(nerr, nwarn, target)
+        return
+
+    ins, modfile = target, args.modfile
+    problems = instruction_problems(ins) if os.path.exists(ins) else ['instruction file not found']
+    names = []
+    if not problems:
+        try:
+            names = list(dict.fromkeys(instruction_names(ins)))
+        except ValueError as e:
+            problems = [str(e)]
+    for p in problems:
+        print(f'ERROR   {ins}: {p}')
+    nerr += len(problems)
+    if nerr:
+        _report(nerr, nwarn, ins)
+    if not names:
+        print(f'WARNING {ins}: no observations identified')
+        nwarn += 1
+    if modfile is None:
+        print(f'{len(names)} observations identified in {ins}: {" ".join(names)}')
+        _report(nerr, nwarn, ins)
+        return
+    if not os.path.exists(modfile):
+        print(f'ERROR   model output file {modfile} not found')
+        raise SystemExit(1)
+    try:
+        values = run_instructions(ins, modfile)
+    except InstructionError as e:
+        print(f'ERROR   {ins}: reading {modfile} failed: {e}')
+        raise SystemExit(1) from None
+    out = args.out or os.path.splitext(ins)[0] + '.obf'
+    write_obf(out, values)
+    print(f'written {out}: {len(values)} observations read from {modfile} with {ins}')
+    _report(nerr, nwarn, ins)
 
 
 def diff(args):
@@ -239,6 +436,7 @@ def diff(args):
 def update(args):
     pst = read_pst(args.pst) if args.pst else None
     par = args.par or pst
+    obs = pst if args.par is None and args.obs_csv is None and args.res is None else None
     if args.par and pst is not None:
         # .par values with the groups from the pst, so --group can apply to them
         par = (read_par(args.par, args.real).reset_index()
@@ -254,7 +452,7 @@ def update(args):
                            (args.res, 'residuals'), (args.obs_csv, 'observation ensemble')):
             if path:
                 manifest.add_source(path, role=role)
-    result = update_workbook(args.workbook, par=par, obs=pst, res=args.res, obs_csv=args.obs_csv,
+    result = update_workbook(args.workbook, par=par, obs=obs, res=args.res, obs_csv=args.obs_csv,
                              real=args.real, pst=pst, out=args.out, backend=args.backend,
                              par_cols=args.par_cols.upper().split(','), obs_cols=args.obs_cols.upper().split(','),
                              overwrite_formulas=args.overwrite_formulas,
@@ -269,7 +467,8 @@ def update(args):
 def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
     # legacy form: makePst.py out.pst mode --add_par_xls ...  (no subcommand)
-    if argv and argv[0] not in ('build', 'dump', 'update', 'parrep', 'init', 'validate', 'diff', '-h', '--help', '-v', '--version'):
+    if argv and argv[0] not in ('build', 'dump', 'update', 'parrep', 'init', 'validate', 'diff', 'tempchek', 'inschek',
+                                '-h', '--help', '-v', '--version'):
         argv.insert(0, 'build')
 
     ap = argparse.ArgumentParser(prog='makepst', description=__doc__)
@@ -310,6 +509,22 @@ def main(argv=None):
     v.add_argument('--strict', action='store_true', help='exit 1 on warnings as well as errors')
     v.add_argument('--quiet', action='store_true', help='hide informational lines')
 
+    t = sub.add_parser('tempchek', help='check a template file, or write model input files from parameter values (like TEMPCHEK)')
+    t.add_argument('target', help='template file, or a control file / workbook (all of its templates)')
+    t.add_argument('modfile', nargs='?', help='with a template: model input file to write')
+    t.add_argument('parfile', nargs='?', help='with a template and modfile: parameter value file (default <template>.par)')
+    t.add_argument('--par', metavar='FILE',
+                   help='with a control file: values from a .par file or IES ensemble instead of PARVAL1')
+    t.add_argument('--real', metavar='NAME', help='realization for an ensemble (base, 17, best; default base)')
+    t.add_argument('--base_dir', metavar='DIR', help='with a control file: folder its paths are relative to')
+    t.add_argument('--dry_run', action='store_true', help='with a control file: check that every value fits, write nothing')
+
+    n = sub.add_parser('inschek', help='check an instruction file, or read a model output file with it (like INSCHEK)')
+    n.add_argument('target', help='instruction file, or a control file / workbook (all of its instruction files)')
+    n.add_argument('modfile', nargs='?', help='with an instruction file: model output file to read')
+    n.add_argument('--out', metavar='OBF', help='observation value file to write (default <instruction file>.obf, or <case>.obf)')
+    n.add_argument('--base_dir', metavar='DIR', help='with a control file: folder its paths are relative to')
+
     f = sub.add_parser('diff', help='what changed between two control files (or workbooks)')
     f.add_argument('old', help='control file or workbook')
     f.add_argument('new', help='control file or workbook')
@@ -344,7 +559,7 @@ def main(argv=None):
     args = ap.parse_args(argv)
     args._argv = argv                 # the command line as given, for the manifest
     {'build': build, 'dump': dump, 'update': update, 'parrep': parrep, 'init': init,
-     'validate': validate, 'diff': diff}[args.cmd](args)
+     'validate': validate, 'diff': diff, 'tempchek': tempchek, 'inschek': inschek}[args.cmd](args)
 
 
 if __name__ == '__main__':

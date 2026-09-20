@@ -191,7 +191,8 @@ def test_cli_version(capsys):
         main(['--version'])
     assert exc_info.value.code == 0
     captured = capsys.readouterr()
-    assert 'makepst 0.1.0' in captured.out or 'makepst 0.1.0' in captured.err
+    from makepst import __version__
+    assert f'makepst {__version__}' in captured.out + captured.err
 
 
 def test_pestpp_regex_extended():

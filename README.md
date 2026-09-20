@@ -89,6 +89,10 @@ makepst build model.pst regul --set_ctl_csv control.csv --add_pargp_csv pargp.cs
 # 2. check it against the template / instruction / output files, like pestchek
 makepst validate model.pst --outputs
 
+# 2b. what PEST will do with them: write the model input file, read the model output files
+makepst tempchek model.pst --dry_run
+makepst inschek model.pst
+
 # 3. control file -> workbook (CONTROL / PARGP / PAR / OBS / PRIOR / IO sheets + a BUILD sheet)
 makepst dump model.pst model.xlsx
 
@@ -123,8 +127,10 @@ makepst validate model.pst --outputs
 makepst validate book.xlsm --strict
 ```
 
-See [Validation](#validation). Template and instruction paths are resolved relative to the
-control file (or workbook); `--base_dir` overrides that. `--strict` also fails on warnings,
+See [Validation](#validation). Template and instruction paths are resolved the way PEST
+resolves them, from the directory PEST is run in: makePst tries the control file's folder,
+the current directory and the control file's parent, uses the one where the files are, and
+says which; `--base_dir` overrides that. `--strict` also fails on warnings,
 `--quiet` hides the informational lines.
 
 ### build — tables → .pst
@@ -194,10 +200,19 @@ makepst update book.xlsm --obs_csv run.3.obs.csv --pst run.pst  # IES simulated 
 
 Every worksheet whose header row contains `PARNME` (or `OBSNME`) is matched row by row on the
 name, so tables spread over several sheets are all found; only the requested columns are
-written and only for names present in the source. Cells that hold formulas are left alone
-unless `--overwrite_formulas`. `--sheet` (glob, case-insensitive) restricts the worksheets;
+written and only for names present in both: names in the results with no row in the workbook,
+and workbook rows absent from the results, are left alone and reported as a warning with
+counts and examples. Cells that hold formulas are left alone unless `--overwrite_formulas`;
+cells inside an array formula or a dynamic-array spill range are never written (Excel would
+refuse), only counted. `--sheet` (glob, case-insensitive) restricts the worksheets;
 `--group` restricts the parameter / observation groups (a `.par` file carries no groups, so
-add `--pst` to supply them).
+add `--pst` to supply them). `--pst` on its own writes the control file's parameter and
+observation columns; next to `--par`, `--res` or `--obs_csv` it only supplies groups and
+measured values, and the observation sheets are not touched by a parameter update.
+
+The xlwings backend reads only each sheet's header, name column and target columns, writes
+contiguous runs of cells in one call each and recalculates once before saving: the
+demonstration workbook (27 sheets, 1,068 parameters over eight sheets) updates in about 9 s.
 
 PESTPP-IES ensembles (`case.N.par.csv`, `case.N.obs.csv`) are recognised by their
 `real_name` header. `--real` picks the realization: a name (`base`, `17`) or `best` — the
@@ -236,6 +251,41 @@ into column A, one option per row). File names in it that match the workbook's o
 to that workbook; other relative names resolve against the workbook's folder. Note that this
 route rebuilds from the workbook's *current* state, so any edits made since the original
 control file was written are picked up too.
+
+### tempchek — templates → model input files
+
+```
+makepst tempchek model.tpl                          # check the template, list its parameters
+makepst tempchek model.tpl model.in [model.par]     # write model.in (values from model.par by default)
+makepst tempchek model.pst [--par run.par] [--real best] [--dry_run]   # every template of the case
+```
+
+Like PEST's TEMPCHEK: a template is checked, then its model input file is written with
+parameter values from a `.par` file (or, given a control file / workbook, from `PARVAL1`
+with `SCALE` and `OFFSET` applied, or from `--par` — a `.par` file or an IES realization).
+Numbers are written the way PEST writes them (its `WRTSIG`): into the parameter space with
+as much precision as the space allows, fixed or exponential notation, right-justified, one
+word per parameter sized for its narrowest space, `PRECIS` / `DPOINT` honoured
+(`double`, `nopoint`). Checked against `tempchek.exe` on a grid of values and widths from 3
+to 23 characters: the same fields are refused, and the written value is never further from
+the true value than PEST's. A value that cannot be written (`1e-10` in a five-character
+space, say) is an error and nothing is written; parameters in the `.par` file that the
+template does not cite are warnings. `--dry_run` checks without writing.
+
+### inschek — model output files → observation values
+
+```
+makepst inschek heads.ins                           # check the instruction file, list its observations
+makepst inschek heads.ins heads.out [--out heads.obf]
+makepst inschek model.pst [--out model.obf]          # every instruction file of the case, one .obf
+```
+
+Like PEST's INSCHEK: the instruction file is checked (the syntax rules in the validation
+table below, including that a line advance can only start an instruction line and that fixed
+/ tab instructions must move right), then read against the model output file with the
+interpreter that `validate --outputs` uses, and the values go to an observation value file
+(`name  value` per line, INSCHEK's `.obf`). With a control file, all instruction files are
+read and observations the control file lists but no file produced are reported.
 
 ### diff — what changed
 
@@ -327,6 +377,12 @@ makepst validate tr13.xlsm            # a workbook with a BUILD sheet is built f
 | malformed prior equation; non-numeric right-hand side; `log()` used on a non-log parameter or vice versa | error |
 | `DERCOM` beyond the number of model command lines | error |
 | name longer than PEST's limit (12 parameter / 20 observation / 12 group; PEST++ allows 200) | warning |
+| **pestchek's rules** (from PEST 17's `pestchek.F` / `cheksub.F`): `PARCHGLIM` vocabulary and `absolute(n)` needing `absparmax(n)=`; log parameters factor-limited with positive values; factor-limited bounds of one sign and non-zero; `SCALE ≠ 0`; tied to itself, tied or parent with initial value 0; group `none` reserved; all parameters fixed/tied; `INCTYP` / `FORCEN` / `DERMTHD` vocabularies and their compatibility; split-column ranges; duplicate groups; `dum` as an observation name; prior weights, labels (≤ 20, not an observation name), duplicated parameters, all-zero factors, group `predict`; regularisation needs a `regul*` group, prediction exactly one `predict` observation; ~60 control-variable range and consistency rules (`RLAMFAC`, `PHIRATSUF`, `FACPARMAX`, `NPHISTP`, `RELPARSTP < RELPARMAX`, `EIGTHRESH`, `PHIMLIM < PHIMACCEPT < 1.2·PHIMLIM`, `WFMIN ≤ WFINIT ≤ WFMAX`, `UPTESTMIN`/`UPTESTLIM`, SVD vs AUI vs LSQR exclusivity, …) | error |
+| pestchek's warnings: derivative increment larger than a third of the range; initial value 0 with a relative increment; group with only fixed/tied parameters; log parameters with a non-relative increment; observation group listed but empty (dropped on write); `MAXSING` above the adjustable-parameter count; more than 300 adjustable parameters with `ICOV`/`ICOR`/`IEIG` on; `NOPTMAX 0` | warning |
+| PEST_HP-only control variables present (`WIN_MRUN_HOURS`, `UPTESTMIN`, `RRFSAVE`, …; plain PEST needs `/hpstart`); observation group whose weights are all zero | note |
+| template: parameter space narrower than 3 characters or containing a tab | error |
+| template: a value that cannot be written into its space as PEST writes numbers (`PRECIS` / `DPOINT` honoured), e.g. `1e-10` in five characters | error |
+| instruction file syntax: `l` / `t` integers, marker delimiters, `!` balance, `[name]n1:n2` order, `dum` in a fixed field, continuation `&` placement, `l` only at the start of a line, `t` and fixed columns moving left to right, unknown instructions — checked statically, without model output | error |
 | section in the `.pst` that makePst drops on read | warning |
 | template or instruction file missing; bad `ptf` / `pif` line | error |
 | parameter cited in no template; template citing an unknown parameter | error |
@@ -352,7 +408,7 @@ from?" after the fact:
 
 ```json
 {
-  "makepst": "0.1.0",
+  "makepst": "0.2.0",
   "command": "build",
   "argv": ["build", "tr13.pst", "regul", "--set_ctl_xls", "tr13.xlsm,CONTROL", "..."],
   "created": "2026-09-19T13:51:39-04:00",
@@ -423,7 +479,7 @@ update_workbook('book.xlsm', par='run.par', res='run.res', out='book_results.xls
 python -m pytest tests -q
 ```
 
-95 tests, no external data needed: a synthetic workbook in the real project layout
+106 tests, no external data needed: a synthetic workbook in the real project layout
 (`tests/data/demo.xlsx`, generated by `tests/make_fixture.py`) with a golden control file,
 `.par`, `.res` and IES ensemble files. They cover golden-file builds from Excel and CSV, the
 `read → write → read` identity, `dump → build` byte equality, workbook updates (multi-sheet
@@ -445,11 +501,13 @@ makepst/
   writer.py         Pst -> .pst text (+ dump.tpl)
   reader.py         .pst text -> Pst
   excel.py          sheets -> Pst; Pst -> workbook; results -> existing workbook
-  cli.py            init / validate / build / dump / update / parrep / diff
+  cli.py            init / validate / build / dump / update / parrep / diff / tempchek / inschek
   diff.py           semantic comparison of two Pst objects
   phi.py            objective function by group from residuals; IES realization phis
   pyemu_bridge.py   to_pyemu / from_pyemu
   checks.py         the validate report: table checks, template / instruction cross-checks, instruction interpreter
+  rules.py          pestchek's rules (parameters, groups, observations, prior information, control variables)
+  model_files.py    PEST's number writer, template filling, .obf files (tempchek / inschek)
   provenance.py     the <output>.manifest.json sidecar
   starter.py        the `init` workbook: control-variable descriptions, example rows, drop-downs
 examples/minimal/   the tutorial inputs

@@ -93,11 +93,9 @@ def test_update_manifest(tmp_path):
           '--out', str(out), '--sheet', 'PAR_*,OBS_HEAD', '--backend', 'openpyxl'])
     m = manifest(out)
     assert m['command'] == 'update' and m['output']['backend'] == 'openpyxl'
-    assert m['output']['sheets'] == {'PAR_HK': {'rows': 6, 'formula_cells_skipped': 0},
-                                     'PAR_SY': {'rows': 2, 'formula_cells_skipped': 0},
-                                     'PAR_RCH': {'rows': 3, 'formula_cells_skipped': 0},
-                                     'OBS_HEAD': {'rows': 4, 'formula_cells_skipped': 0},
-                                     'PHI': {'rows': 5, 'formula_cells_skipped': 0}}
+    assert {s: v['rows'] for s, v in m['output']['sheets'].items()} == {
+        'PAR_HK': 6, 'PAR_SY': 2, 'PAR_RCH': 3, 'OBS_HEAD': 4, 'PHI': 5}
+    assert all(v['formula_cells_skipped'] == 0 and v['cells_refused'] == 0 for v in m['output']['sheets'].values())
     assert m['sheet'] == ['PAR_*', 'OBS_HEAD'] and m['par_cols'] == 'PARVAL1'
     roles = {os.path.basename(s['path']): s['role'] for s in m['sources']}
     assert roles == {'u.xlsx': 'workbook', 'demo.par': 'parameter values', 'demo.res': 'residuals'}

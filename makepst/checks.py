@@ -11,8 +11,10 @@ import re
 
 import pandas as pd
 
+from .model_files import fit_problems, scaled_values
 from .pst import ADJUSTABLE, Pst, equation_params, is_number
 from .sections import ALL_SECTIONS
+from .writer import effective_control
 
 KNOWN_SECTIONS = {s.name for s in ALL_SECTIONS} | {
     'regularization', 'parameter groups', 'parameter data', 'observation groups', 'observation data',
@@ -173,7 +175,105 @@ def template_names(path):
     return [m.strip().lower() for m in re.findall(f'{d}(.*?){d}', body)]
 
 
+def template_problems(path):
+    """pestchek's template checks beyond the names: spaces narrower than 3 characters, tabs inside them."""
+    with open(path, errors='replace') as f:
+        head = f.readline().split()
+        body = f.read()
+    if len(head) != 2:
+        return []
+    d = re.escape(head[1])
+    out = []
+    for m in re.finditer(f'{d}(.*?){d}', body):
+        space = m.group(0)
+        if '\t' in space:
+            out.append(f'tab character inside the parameter space for {m.group(1).strip()!r}')
+        elif len(space) < 3:
+            out.append(f'parameter space for {m.group(1).strip()!r} is narrower than 3 characters')
+    return sorted(set(out))
+
+
 _INS_NAME = re.compile(r'!([^!\s]+)!|\[([^\]\s]+)\]|\(([^)\s]+)\)')
+
+
+def instruction_problems(path):
+    """pestchek's static instruction-file checks (syntax only; nothing is read from the model output)."""
+    with open(path, errors='replace') as f:
+        head = f.readline().split()
+        raw = f.read().splitlines()
+    if len(head) != 2 or head[0].lower() not in ('pif', 'jif'):
+        return ['first line must be "pif" or "jif" followed by the marker delimiter']
+    d = head[1]
+    if len(d) != 1 or d.isalnum() or d in '!&[]():':
+        return [f'illegal marker delimiter {d!r}']
+    tok_re = re.compile(re.escape(d) + '[^' + re.escape(d) + ']*' + re.escape(d) + r'|\S+')
+    out = []
+    first = True
+    col = 0                        # rightmost column pinned by t / [ ] / ( ) on the current output line
+    for li, ln in enumerate(raw, 2):
+        s = ln.strip()
+        if not s:
+            continue
+        continued = s.startswith('&')
+        if continued:
+            if first:
+                out.append(f'line {li}: the first instruction line cannot begin with the continuation character "&"')
+            s = s[1:].strip()
+        else:
+            if s.count(d) % 2:
+                out.append(f'line {li}: marker delimiter {d!r} not closed')
+            lead = s.split()[0].lower()
+            if not (lead.startswith(d) or re.fullmatch(r'l\d+', lead)):
+                out.append(f'line {li}: an instruction line must begin with "l", a marker or "&"')
+            col = 0
+        first = False
+        for ti, t in enumerate(tok_re.findall(s)):
+            low = t.lower()
+            if t.startswith(d):
+                if len(t) < 3:
+                    out.append(f'line {li}: marker has zero length')
+                elif '\t' in t:
+                    out.append(f'line {li}: tab character inside marker {t}')
+            elif re.fullmatch(r'l\d+', low):
+                if int(low[1:]) <= 0:
+                    out.append(f'line {li}: the integer after "l" must be positive')
+                if ti > 0 or continued:
+                    out.append(f'line {li}: a line advance ({t}) can only occur at the beginning of an instruction line')
+            elif re.fullmatch(r't\d+', low):
+                if int(low[1:]) <= 0:
+                    out.append(f'line {li}: the integer after "t" must be positive')
+                elif int(low[1:]) < col:
+                    out.append(f'line {li}: {t} moves backwards; a model output line must be read from left to right')
+                else:
+                    col = int(low[1:])
+            elif low == 'w':
+                pass
+            elif t.startswith('!'):
+                if not t.endswith('!') or t.count('!') != 2 or len(t) < 3:
+                    out.append(f'line {li}: "!" not balanced in {t}')
+                elif len(t) - 2 > 20:
+                    out.append(f'line {li}: observation name longer than 20 characters in {t}')
+            elif t[0] in '[(':
+                m = re.fullmatch(r'[\[(]([^\])]*)[\])](\d+):(\d+)', t)
+                if not m:
+                    out.append(f'line {li}: fixed / semi-fixed instruction must be [name]n1:n2 or (name)n1:n2, got {t}')
+                elif not m.group(1):
+                    out.append(f'line {li}: missing observation name in {t}')
+                elif m.group(1).lower() == 'dum':
+                    out.append(f'line {li}: "dum" is only allowed for non-fixed (!dum!) observations')
+                elif int(m.group(2)) == 0 or int(m.group(3)) < int(m.group(2)):
+                    out.append(f'line {li}: columns n1:n2 must be positive and increasing in {t}')
+                elif len(m.group(1)) > 20:
+                    out.append(f'line {li}: observation name longer than 20 characters in {t}')
+                elif int(m.group(2)) < col:
+                    out.append(f'line {li}: {t} starts left of column {col}; a model output line must be read from left to right')
+                else:
+                    col = int(m.group(3))
+            elif low.startswith('&'):
+                out.append(f'line {li}: "&" is only allowed at the beginning of a line')
+            else:
+                out.append(f'line {li}: illegal instruction {t!r}')
+    return out
 
 
 def instruction_names(path):
@@ -198,6 +298,9 @@ def check_files(pst: Pst, base_dir='.', outputs=False):
     rel = lambda p: os.path.join(base_dir, p)                              # noqa: E731
 
     par_names = set(pst.par['PARNME'])
+    ctl = effective_control(pst)
+    precis, dpoint = ctl.get('precis', 'single'), ctl.get('dpoint', 'point')
+    values = scaled_values(pst.par)
     cited = {}
     for tpl, model_in in pst.tpl:
         if not os.path.exists(rel(tpl)):
@@ -210,6 +313,12 @@ def check_files(pst: Pst, base_dir='.', outputs=False):
             continue
         if not names:
             warn(tpl, 'cites no parameters')
+        problems = template_problems(rel(tpl))
+        for problem in problems:
+            err(tpl, problem)
+        if not problems:                            # as TEMPCHEK would write it: does every value fit its space?
+            for problem in fit_problems(rel(tpl), values, precis, dpoint):
+                err(tpl, f'value cannot be written into its space: {problem}')
         unknown = sorted(set(names) - par_names)
         if unknown:
             err(tpl, f'cites parameters not in the control file: {_names(unknown)}')
@@ -236,6 +345,8 @@ def check_files(pst: Pst, base_dir='.', outputs=False):
             continue
         if not names:
             warn(ins, 'reads no observations')
+        for problem in instruction_problems(rel(ins)):
+            err(ins, problem)
         unknown = sorted(set(names) - obs_names)
         if unknown:
             err(ins, f'reads observations not in the control file: {_names(unknown)}')
@@ -267,7 +378,7 @@ def check_files(pst: Pst, base_dir='.', outputs=False):
         for tok in cmd.split()[:2]:
             looks_like_file = ('/' in tok or '\\' in tok or tok.lower().endswith(('.bat', '.exe', '.py', '.sh')))
             if looks_like_file and not os.path.exists(rel(tok)):
-                warn('model command line', f'{tok} not found relative to the control file')
+                warn('model command line', f'{tok} not found in {os.path.abspath(base_dir)}')
     return out
 
 
@@ -399,7 +510,8 @@ def _store(values, name, text, li):
 
 # ---------------------------------------------------------------------- driver
 def validate(pst: Pst, base_dir='.', pst_path=None, outputs=False):
-    findings = check_tables(pst)
+    from .rules import check_extra
+    findings = check_tables(pst) + check_extra(pst)
     if pst_path:
         findings += check_sections(pst_path)
     findings += check_files(pst, base_dir, outputs)

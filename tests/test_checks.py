@@ -65,6 +65,26 @@ def test_validate_strict_on_warnings(minimal, capsys):
         main(['validate', 'model.pst', '--strict'])
 
 
+def test_validate_paths_relative_to_run_directory(minimal, tmp_path, monkeypatch, capsys):
+    """Control file in a subfolder, paths relative to the model root, run from the root."""
+    root = tmp_path / 'root'
+    (root / 'pest').mkdir(parents=True)
+    for f in ('model.tpl', 'heads.ins', 'flow.ins', 'heads.out', 'flow.out', 'model.py'):
+        shutil.copy(minimal / f, root / 'pest' / f)
+    p = read_pst('model.pst')
+    p.tpl = [('pest/' + a, b) for a, b in p.tpl]
+    p.ins = [('pest/' + a, b) for a, b in p.ins]
+    write_pst(p, str(root / 'pest' / 'case.pst'), dump_tpl=False)
+    monkeypatch.chdir(root)
+    main(['validate', 'pest/case.pst', '--quiet'])                  # would fail if resolved from pest/
+    out = capsys.readouterr().out
+    assert '0 errors' in out
+    main(['validate', 'pest/case.pst'])
+    assert f'resolved relative to {root}' in capsys.readouterr().out
+    with pytest.raises(SystemExit):                                   # an explicit --base_dir is obeyed
+        main(['validate', 'pest/case.pst', '--base_dir', 'pest'])
+
+
 def test_validate_workbook_target(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
     with pytest.raises(SystemExit):                      # fixture workbook points at PEST\*.tpl that don't exist
