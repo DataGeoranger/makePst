@@ -6,8 +6,8 @@ authors:
   - family-names: Ou
     given-names: Michael
     email: ougengxin@gmail.com
-version: 0.2.0
-date-released: 2026-09-19
+version: 0.3.0
+date-released: 2026-09-21
 repository-code: "https://github.com/ougx/makePst"
 license: MIT
 keywords:

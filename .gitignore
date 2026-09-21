@@ -33,3 +33,4 @@ dist/
 # local copies of real projects used for timing (proprietary)
 examples/mnnrd/
 paper/*.docx
+.docx_render/manuscript.pdf

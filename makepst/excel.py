@@ -24,6 +24,29 @@ def load_table(spec):
         path, sheet = spec.rsplit(',', 1)
         engine = None if path.lower().endswith('.xls') else XL_ENGINE
         df = pd.read_excel(path, sheet, engine=engine)
+        build_columns = set(PAR_COLS + OBS_COLS + PRIOR_COLS) | {
+            'VALUE', 'IN', 'OUT', 'VAL', 'COVFILE', 'COMMAND', 'TIETO', 'PP_VAR',
+        }
+        relevant = [c for c in df if isinstance(c, str) and c.strip().upper() in build_columns]
+        if engine == XL_ENGINE and relevant and df[relevant].isna().any().any():
+            import openpyxl
+            wb = openpyxl.load_workbook(path, read_only=True, data_only=False)
+            try:
+                ws = wb[sheet]
+                missing = []
+                targets = {(int(row) + 2, int(df.columns.get_loc(col)) + 1)
+                           for col in relevant for row in df.index[df[col].isna()]}
+                for row_num, cells in enumerate(ws.iter_rows(min_row=2, max_row=max(r for r, _ in targets),
+                                                               max_col=max(c for _, c in targets)), 2):
+                    for col_num, cell in enumerate(cells, 1):
+                        if (row_num, col_num) in targets and cell.data_type == 'f':
+                            missing.append(cell.coordinate)
+                if missing:
+                    warnings.warn(f'{spec}: {len(missing)} formula cells have no cached value '
+                                  f'(e.g. {", ".join(missing[:5])}); recalculate and save in Excel before build. '
+                                  'Existing cached values may also be stale; freshness cannot be determined.')
+            finally:
+                wb.close()
     else:
         df = pd.read_csv(spec)
     df.columns = [c.strip().upper() if isinstance(c, str) else c for c in df.columns]
@@ -352,15 +375,15 @@ def _update_sheet(book, sheet, key, values, create=(), overwrite_formulas=False)
     Columns of `values` missing from the sheet are created only if listed in `create`.
     Cells holding a formula are left alone unless `overwrite_formulas`; cells Excel refuses
     (array formulas, spill ranges) are always left alone.
-    Returns (rows updated, formula cells skipped, refused cells, names found in the sheet).
+    Returns (rows updated, formula cells skipped, refused cells, names found, matched names).
     """
     header, names = book.index(sheet, key)
     if not names:
-        return 0, 0, 0, set()
+        return 0, 0, 0, set(), []
     seen = {name for _, name in names if name}
     matched = [(i, name) for i, name in names if name in values.index]
     if not matched:
-        return 0, 0, 0, seen
+        return 0, 0, 0, seen, []
     cols = {}
     for c in values.columns:
         if c in header:
@@ -381,7 +404,7 @@ def _update_sheet(book, sheet, key, values, create=(), overwrite_formulas=False)
             v = values.at[name, c]
             changes.append((i, col, None if fmt(v) == '' else (v.item() if hasattr(v, 'item') else v)))
     refused += book.write_many(sheet, changes)
-    return hits, skipped, refused, seen
+    return hits, skipped, refused, seen, [name for _, name in matched]
 
 
 def _sheet_selected(name, patterns):
@@ -390,7 +413,7 @@ def _sheet_selected(name, patterns):
 
 def update_workbook(path, par=None, obs=None, res=None, obs_csv=None, real=None, pst=None,
                     out=None, backend=None, par_cols=('PARVAL1',), obs_cols=('OBSVAL', 'WEIGHT'),
-                    overwrite_formulas=False, sheets=None, groups=None, phi=True):
+                    overwrite_formulas=False, sheets=None, groups=None, phi=True, dry_run=False):
     """Update an existing workbook in place (or to `out`).
 
     par: a Pst, a DataFrame with PARNME, a .par file or an IES case.N.par.csv (realization `real`)
@@ -445,10 +468,14 @@ def update_workbook(path, par=None, obs=None, res=None, obs_csv=None, real=None,
     if par_df is None and obs_df is None and res_df is None:
         raise ValueError('nothing to update: give par, obs, res or obs_csv')
 
+    if dry_run:
+        backend = 'openpyxl'  # preview changes only in memory, never through a live Excel session
     book, backend = _open(path, backend)
-    if backend == 'openpyxl':
+    if backend == 'openpyxl' and not dry_run:
         warnings.warn('openpyxl backend: macros are kept, but charts/images are dropped and '
-                      'formulas are not recalculated until Excel opens the file')
+                      'formulas are not recalculated. Before using this updated workbook as '
+                      'input to build, recalculate and save it in Excel; otherwise build may '
+                      'read missing or stale cached formula values')
     touched = {}
     in_book = {'PARNME': set(), 'OBSNME': set()}       # names the selected sheets hold, per key
     try:
@@ -459,9 +486,12 @@ def update_workbook(path, par=None, obs=None, res=None, obs_csv=None, real=None,
             for key, df, create in (('PARNME', par_df, ()), ('OBSNME', obs_df, ()),
                                     ('OBSNME', res_df, ('MODELLED', 'RESIDUAL'))):
                 if df is not None:
-                    hits, skipped, refused, seen = _update_sheet(book, sheet, key, df, create, overwrite_formulas)
+                    hits, skipped, refused, seen, names = _update_sheet(book, sheet, key, df, create, overwrite_formulas)
                     n, k, b = n + hits, k + skipped, b + refused
                     in_book[key] |= seen
+                    if dry_run and names:
+                        print(f'  {sheet} {key}: {len(names)} matches; columns {", ".join(df.columns)}; '
+                              f'examples {", ".join(names[:5])}')
             if n:
                 print(f'{sheet}: {n} rows matched' + (f', {k} formula cells left alone' if k else '')
                       + (f', {b} cells refused by Excel (array formula / spill range)' if b else ''))
@@ -470,7 +500,8 @@ def update_workbook(path, par=None, obs=None, res=None, obs_csv=None, real=None,
             book.write_table(name, table)
             print(f'{name}: {len(table)} rows written')
             touched[name] = {'rows': len(table), 'formula_cells_skipped': 0, 'cells_refused': 0}
-        book.save(out or path)
+        if not dry_run:
+            book.save(out or path)
     finally:
         book.close()
 
@@ -489,5 +520,5 @@ def update_workbook(path, par=None, obs=None, res=None, obs_csv=None, real=None,
             warnings.warn(f'{len(extra)} {what} in the workbook are not in the results and were left unchanged: '
                           f'{extra[:5]}{"..." if len(extra) > 5 else ""}')
         unmatched[what] = {'not_in_workbook': len(missing), 'not_in_results': len(extra)}
-    print(f'workbook saved to {out or path} ({backend})')
+    print(f'preview complete; no files written' if dry_run else f'workbook saved to {out or path} ({backend})')
     return {'sheets': touched, 'backend': backend, 'unmatched': unmatched}

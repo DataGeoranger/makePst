@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.3.0 (2026-09-21)
+
+- `log`: ledger of every manifest under a folder — when, which command, which output from
+  which sources, dimensions, version; `--file` filters by file name, path or sha256 prefix
+  ("which runs used that version of the workbook?"), `--command`, `--last`, `--check`
+  verifies every recorded hash
+- `bundle`: zip a run for reproduction or review — control file, manifest, templates,
+  instruction files, model inputs, command-line files; `--sources`, `--outputs`, `--extra`,
+  `--list`, `--strict`; the zip gets its own manifest
+- `provenance`: compare the hashes recorded in a manifest with the files on disk
+  (`unchanged` / `changed` / `missing`; exit 1 unless all unchanged)
+- `update --dry_run`: preview matched names, target columns and skipped cells without writing
+- `build` warns when a referenced sheet has formulas without cached values (a workbook saved
+  by openpyxl and not yet recalculated in Excel)
+- `hpstart`: a PEST_HP `.hp` file with observation values from residuals or an IES realization
+
 ## 0.2.0 (2026-09-19)
 
 - `update`: the xlwings backend reads only headers, name and target columns, writes contiguous

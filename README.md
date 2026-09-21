@@ -14,8 +14,11 @@ reads control files back into editable workbooks, and returns calibration result
 Excel / CSV tables                     ->  .pst                   makepst build
 .pst                                   ->  editable workbook      makepst dump
 .par / .res / .rei / IES ensemble      ->  existing workbook      makepst update
-.par or IES realization (+ tweaks)     ->  new .pst               makepst parrep
+    .par or IES realization (+ tweaks)     ->  new .pst               makepst parrep
+    .res/.rei or IES obs + existing .hp     ->  new .hp                makepst hpstart
 two .pst / workbooks                   ->  what changed           makepst diff
+manifests in a folder                  ->  run ledger             makepst log
+.pst + everything it references        ->  zip for review         makepst bundle
 ```
 
 See [What round-tripping preserves](#what-round-tripping-preserves) for the exact guarantees
@@ -192,6 +195,7 @@ makepst update book.xlsm --res run.res                          # adds MODELLED 
 makepst update book.xlsm --pst run.pst --par_cols PARVAL1,PARTRANS,PARLBND,PARUBND
 makepst update book.xlsm --par run.3.par.csv --real best        # PESTPP-IES ensemble
 makepst update book.xlsm --obs_csv run.3.obs.csv --pst run.pst  # IES simulated values
+makepst update book.xlsm --par run.par --dry_run               # preview; write nothing
     [--sheet "PAR_*"] [--group hk,sy] [--overwrite_formulas] [--out copy.xlsm] [--backend openpyxl|xlwings]
 ```
 
@@ -229,8 +233,13 @@ Both sheets are rewritten on each run (`--no_phi` to skip).
 
 Two backends: **xlwings** (used when installed; drives Excel invisibly, so everything in the
 workbook is preserved and formulas recalculate; Windows/macOS with Excel) or **openpyxl**
-(no Excel needed; keeps VBA macros; drops charts and images; formula results are stale until
-Excel next opens the file). The backend used is printed.
+(no Excel needed; keeps VBA macros; drops charts and images; does not recalculate formulas).
+Before building from a workbook updated with openpyxl, recalculate and save it in Excel;
+otherwise the build may read missing or stale cached formula values. The backend used is printed.
+`--dry_run` uses openpyxl to preview matched names, target columns, skipped formulas and
+unmatched names without saving a workbook or manifest. It does not test whether Excel will
+refuse individual writes. During `build`, missing cached formula results in referenced
+tables produce a warning; existing cached values may still be stale and cannot be verified.
 
 ### parrep — .par values → new .pst
 
@@ -251,6 +260,26 @@ into column A, one option per row). File names in it that match the workbook's o
 to that workbook; other relative names resolve against the workbook's folder. Note that this
 route rebuilds from the workbook's *current* state, so any edits made since the original
 control file was written are picked up too.
+
+### hpstart — modeled observations → new PEST_HP .hp file
+
+```
+makepst hpstart case.pst start.hp --template case.hp --res case.res
+makepst hpstart case.pst start.hp --template case.hp --obs_csv case.3.obs.csv --real best
+makepst hpstart case.pst start.hp --template case.hp --res case.rei --par case.par
+```
+
+By default, parameter values are copied unchanged from the template `.hp`, **not** from
+`PARVAL1` in the `.pst`. Use `--par` to replace them with values from a PEST `.par` file
+or a selected IES parameter realization. The `.pst` supplies parameter and observation
+names and order; the template supplies PEST_HP instruction metadata that a residual or
+IES observation file cannot provide. `hpstart` replaces the template's reference
+modeled-observation array in `.pst` observation order. Every required observation must
+be present with a finite value; extra result rows are ignored. The template must come
+from the same control-file layout and
+observation/parameter order. The binary format stores counts but not names, so matching
+counts alone cannot establish that the template has the right order. The original `.hp`
+is never modified, and the new file receives a provenance manifest by default.
 
 ### tempchek — templates → model input files
 
@@ -301,6 +330,39 @@ instruction pairs, command lines and header comments. Numbers are compared with 
 tolerance, so `49.7377` vs `49.73775` shows up at the default `1e-9` and disappears at
 `--rtol 1e-5`. Prints a table per section and a one-line summary; `--xlsx` writes the same
 tables to a workbook for review. Exits 1 when there are differences, like `diff`.
+
+### log — the run ledger
+
+```
+makepst log [FOLDER ...] [--file tr13.xlsm] [--command build] [--last 10] [--check] [--no_recursive]
+```
+
+Every manifest under the folders (default: the current one, recursively), oldest first, one
+line each: when, which command, which output, from which sources, the dimensions, the
+makePst version. `--file` keeps the entries whose output or sources include a file — by name,
+path or **sha256 prefix**, so `--file b43fc509` answers "which runs used *that* version of
+the workbook?" even after the file was renamed or overwritten. `--check` adds a column from
+`provenance`: `unchanged` / `changed` / `missing`.
+
+```
+2026-09-19 21:14 build      pest/tr13.pst <- tr13.xlsm  [1068 par 41747 obs 159 prior]  makepst 0.3.0
+2026-09-21 08:10 update     tr13-xlwings.xlsm <- tr13.xlsm, tr13.par  [1068 rows in 8 sheets]  makepst 0.3.0
+```
+
+### bundle — a run, zipped for review
+
+```
+makepst bundle model.pst [run.zip] [--sources] [--outputs] [--extra "bin/**"] [--list] [--strict]
+```
+
+Zips the control file with its manifest, every template and instruction file, the model
+input files the templates write, and any file named on the model command line, with paths
+relative to the run directory so the archive unzips runnable. `--sources` adds the manifest's
+sources (the workbook, the `.par` ...), `--outputs` the model output files, `--extra` any
+glob relative to the run directory (the model binaries, say). Files the control file
+references but that don't exist are listed as `MISSING` (exit 1 with `--strict`); `--list`
+shows what would be bundled without writing. The zip gets its own manifest, so `log` shows
+who bundled what and when.
 
 ## What round-tripping preserves
 
@@ -408,7 +470,7 @@ from?" after the fact:
 
 ```json
 {
-  "makepst": "0.2.0",
+  "makepst": "0.3.0",
   "command": "build",
   "argv": ["build", "tr13.pst", "regul", "--set_ctl_xls", "tr13.xlsm,CONTROL", "..."],
   "created": "2026-09-19T13:51:39-04:00",
@@ -420,7 +482,7 @@ from?" after the fact:
      "sheets": ["CONTROL", "PARGP", "PAR_HK", "PAR_VK", "...", "PPglm"]}
   ],
   "output": {"path": "D:\\...\\tr13.pst", "sha256": "d93f317d...", "size": 2163331,
-             "npar": 1068, "nobs": 41747, "npargp": 12, "nprior": 185, "nobsgp": 12,
+             "npar": 1068, "nobs": 41747, "npargp": 12, "nprior": 159, "nobsgp": 12,
              "ntplfle": 18, "ninsfle": 7, "pestmode": "regularisation"}
 }
 ```
@@ -431,6 +493,15 @@ realization and `--set` values (and, from a workbook, the resolved build argumen
 `update` records which sheets were written, how many rows each, how many formula cells were
 left alone, and the backend. A hash mismatch between a manifest and the workbook on disk is
 the signal that the control file no longer corresponds to the spreadsheet.
+
+Run `makepst provenance model.pst` (or pass `model.pst.manifest.json`) to compare every
+recorded input and output hash with the files at their recorded paths. It reports
+`unchanged`, `changed`, `missing`, or `not recorded` and exits with status 1 unless all
+records are unchanged. This checks file identity, not the validity of PEST tables; use
+`makepst validate` for the latter. Moving files requires updating their recorded paths.
+`makepst log` lists the manifests of a whole project folder as a ledger (with `--check`,
+each one verified), and `makepst bundle` zips a run with everything its control file
+references — see the two commands above.
 
 ## Relationship to pyEMU
 
@@ -501,14 +572,14 @@ makepst/
   writer.py         Pst -> .pst text (+ dump.tpl)
   reader.py         .pst text -> Pst
   excel.py          sheets -> Pst; Pst -> workbook; results -> existing workbook
-  cli.py            init / validate / build / dump / update / parrep / diff / tempchek / inschek
+  cli.py            init / validate / build / dump / update / parrep / diff / tempchek / inschek / log / bundle
   diff.py           semantic comparison of two Pst objects
   phi.py            objective function by group from residuals; IES realization phis
   pyemu_bridge.py   to_pyemu / from_pyemu
   checks.py         the validate report: table checks, template / instruction cross-checks, instruction interpreter
   rules.py          pestchek's rules (parameters, groups, observations, prior information, control variables)
   model_files.py    PEST's number writer, template filling, .obf files (tempchek / inschek)
-  provenance.py     the <output>.manifest.json sidecar
+  provenance.py     the <output>.manifest.json sidecar; provenance / log / bundle
   starter.py        the `init` workbook: control-variable descriptions, example rows, drop-downs
 examples/minimal/   the tutorial inputs
 tests/              suite + fixture generator
@@ -521,7 +592,7 @@ stored anywhere. To release: bump the version in `pyproject.toml` and the fallba
 `makepst/__init__.py` (a test keeps them equal), add a `CHANGELOG.md` entry, commit, then
 
 ```
-git tag v0.2.0 && git push origin main v0.2.0
+git tag v0.3.0 && git push origin main v0.3.0
 ```
 
 The `publish` workflow checks that the tag matches the package version, runs the tests, builds

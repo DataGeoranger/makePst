@@ -1,10 +1,10 @@
 """Regenerate the numbers in the manuscript's demonstration section and Table 1.
 
-    python paper/reproduce.py <workbook.xlsm> <legacy.pst> [work_dir]
+    python paper/reproduce.py <workbook.xlsm> [work_dir]
 
 The workbook is the calibration workbook (sheets CONTROL, PARGP, PAR_*, OBS_*, IO, PPcntl,
-PPglm); legacy.pst is the control file the previous script produced for the same run. All
-outputs go to work_dir (default: a temporary folder). Nothing in the project folder is touched.
+PPglm). All outputs go to work_dir (default: a temporary folder). Nothing in the project
+folder is touched.
 """
 import contextlib
 import io
@@ -33,7 +33,7 @@ def timed(fn):
     return result, time.perf_counter() - t0
 
 
-def run(book, legacy, work):
+def run(book, work):
     book = os.path.abspath(book)
     pst = os.path.join(work, 'demo.pst')
     args = [pst, 'regul', '--set_ctl_xls', f'{book},CONTROL', '--add_pargp_xls', f'{book},PARGP']
@@ -51,10 +51,6 @@ def run(book, legacy, work):
     q = read_pst(rebuilt)
     d, t_diff = timed(lambda: compare(p, q))
     identical = open(pst).read() == open(rebuilt).read()
-
-    old = read_pst(legacy)
-    d9 = compare(old, p, rtol=1e-9)
-    d5 = compare(old, p, rtol=1e-5)
 
     # results back: a .par (values * 1.01) and a .res (residual -0.5) derived from the control file
     par_file, res_file = os.path.join(work, 'demo.par'), os.path.join(work, 'demo.res')
@@ -76,15 +72,13 @@ def run(book, legacy, work):
     print(f'build {t_build:.1f} s (read {t_read:.2f} s) | dump {t_dump:.1f} s | rebuild {t_rebuild:.1f} s | '
           f'diff {t_diff:.2f} s | update (openpyxl) {t_update:.1f} s')
     print(f'round trip: {d.summary()}; byte-identical: {identical}')
-    print(f'legacy vs makepst, rtol 1e-9: {d9.summary()}')
-    print(f'legacy vs makepst, rtol 1e-5: {d5.summary()}')
     print('update rows: ' + ', '.join(f'{k} {v["rows"]}' for k, v in upd['sheets'].items()))
 
 
 if __name__ == '__main__':
-    if len(sys.argv) < 3:
+    if len(sys.argv) < 2:
         raise SystemExit(__doc__)
-    work = sys.argv[3] if len(sys.argv) > 3 else tempfile.mkdtemp(prefix='makepst-paper-')
+    work = sys.argv[2] if len(sys.argv) > 2 else tempfile.mkdtemp(prefix='makepst-paper-')
     os.makedirs(work, exist_ok=True)
-    run(sys.argv[1], sys.argv[2], work)
+    run(sys.argv[1], work)
     print(f'work folder: {work}')

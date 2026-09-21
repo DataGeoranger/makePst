@@ -28,7 +28,7 @@ def test_build_manifest(tmp_path):
     m = manifest(out)
     assert m['makepst'] == __version__ and m['command'] == 'build' and m['argv'][1] == str(out)
     assert m['created'][:4] == '2026' or len(m['created']) >= 19
-    assert m['python'] and m['pandas'] and m['platform'] and m['cwd']
+    assert m['python'] and m['pandas'] and m['openpyxl'] and m['platform'] and m['cwd']
     src = {os.path.basename(s['path']): s for s in m['sources']}
     assert list(src) == ['demo.xlsx']                                # one entry, many sheets
     assert src['demo.xlsx']['sha256'] == sha256(BOOK)

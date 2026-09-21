@@ -3,9 +3,10 @@ try:                                        # the installed package's metadata (
     from importlib.metadata import version as _dist_version
     __version__ = _dist_version('makepst')
 except Exception:                           # a checkout run without installing
-    __version__ = '0.2.0'
+    __version__ = '0.3.0'
 
 from .excel import load_table, to_workbook, update_workbook
+from .hpstart import write_hpstart
 from .model_files import fill_template, write_number
 from .provenance import Manifest
 from .pst import Pst, read_ensemble, read_obs_ensemble, read_par, read_res
@@ -24,4 +25,4 @@ def from_pyemu(ppst):
 
 __all__ = ['Pst', 'read_pst', 'from_text', 'write_pst', 'to_text',
            'load_table', 'to_workbook', 'update_workbook', 'read_par', 'read_res', 'read_ensemble', 'read_obs_ensemble',
-           'fill_template', 'write_number', 'Manifest', '__version__', 'to_pyemu', 'from_pyemu']
+           'fill_template', 'write_number', 'write_hpstart', 'Manifest', '__version__', 'to_pyemu', 'from_pyemu']

@@ -1,6 +1,7 @@
 """Command line: build (Excel/CSV -> pst), dump (pst -> Excel), update (values -> existing workbook),
 parrep (.par values -> pst), init (starter workbook), validate (pestchek-style checks), diff (compare two),
-tempchek (templates -> model input files), inschek (model output files -> observation values)."""
+tempchek (templates -> model input files), inschek (model output files -> observation values),
+provenance / log / bundle (manifests: verify, list as a ledger, zip a run)."""
 import argparse
 import os
 import shlex
@@ -8,7 +9,7 @@ import sys
 
 from . import __version__
 from .excel import expand_spec, load_table, to_workbook, update_workbook
-from .provenance import Manifest
+from .provenance import Manifest, check_manifest
 from .pst import Pst, read_par
 from .reader import read_pst
 from .writer import write_pst
@@ -445,7 +446,7 @@ def update(args):
     def flat(items):   # repeated flags, each possibly a comma list
         return [x.strip() for s in items for x in s.split(',') if x.strip()] or None
 
-    manifest = None if args.no_manifest else Manifest('update', args._argv)
+    manifest = None if args.no_manifest or args.dry_run else Manifest('update', args._argv)
     if manifest is not None:
         manifest.add_source(args.workbook, role='workbook')
         for path, role in ((args.par, 'parameter values'), (args.pst, 'control file'),
@@ -456,7 +457,8 @@ def update(args):
                              real=args.real, pst=pst, out=args.out, backend=args.backend,
                              par_cols=args.par_cols.upper().split(','), obs_cols=args.obs_cols.upper().split(','),
                              overwrite_formulas=args.overwrite_formulas,
-                             sheets=flat(args.sheet), groups=flat(args.group), phi=not args.no_phi)
+                             sheets=flat(args.sheet), groups=flat(args.group), phi=not args.no_phi,
+                             dry_run=args.dry_run)
     if manifest is not None:
         manifest.set_output(args.out or args.workbook, sheets=result['sheets'], backend=result['backend'])
         manifest.add(realization=args.real, par_cols=args.par_cols, obs_cols=args.obs_cols,
@@ -464,11 +466,87 @@ def update(args):
         print(f'manifest written to {manifest.write()}')
 
 
+def provenance(args):
+    path = args.target if args.target.endswith('.manifest.json') else args.target + '.manifest.json'
+    for status, name in check_manifest(path):
+        print(f'{status:12s} {name}')
+        if status != 'unchanged':
+            args._failed = True
+    if getattr(args, '_failed', False):
+        raise SystemExit(1)
+
+
+def log(args):
+    """The ledger: every manifest under the folders, oldest first — what produced which file from what."""
+    from .provenance import find_manifests, log_line, mentions
+    rows = find_manifests(args.folder or ['.'], recursive=not args.no_recursive)
+    if args.file:
+        rows = [r for r in rows if any(mentions(r, f) for f in args.file)]
+    if args.command:
+        rows = [r for r in rows if r.get('command') in args.command]
+    if args.last:
+        rows = rows[-args.last:]
+    for r in rows:
+        print(log_line(r, check=args.check))
+    if not rows:
+        print('no manifests found')
+
+
+def bundle(args):
+    """Zip a run so it can be reproduced or reviewed elsewhere (control file, manifest, templates,
+    instruction files, model inputs, command files; --sources / --outputs / --extra for more)."""
+    from .provenance import bundle_run
+    pst = read_pst(args.pstfile)
+    base = args.base_dir or guess_base_dir(pst, args.pstfile)
+    manifest = None if (args.no_manifest or args.list) else Manifest('bundle', args._argv)
+    out = None if args.list else (args.out or os.path.splitext(args.pstfile)[0] + '.zip')
+    included, missing = bundle_run(pst, args.pstfile, out, base_dir=base, sources=args.sources,
+                                   outputs=args.outputs, extra=args.extra, manifest=manifest)
+
+    def show(path):
+        rel = os.path.relpath(path, base)
+        return path if rel.startswith('..') else rel
+
+    for role, path in included:
+        print(f'{"would add" if args.list else "added":10s} {role:18s} {show(path)}')
+    for role, path in missing:
+        print(f'MISSING    {role:18s} {show(path)}')
+    if args.list:
+        print(f'{len(included)} files, {len(missing)} missing (nothing written)')
+        return
+    size = os.path.getsize(out) / 1e6
+    print(f'written {out}: {len(included)} files, {size:.1f} MB' + (f', {len(missing)} missing' if missing else ''))
+    if manifest is not None:
+        manifest.set_output(out, files=len(included), missing=[p for _, p in missing])
+        print(f'manifest written to {manifest.write()}')
+    if missing and args.strict:
+        raise SystemExit(1)
+
+
+def hpstart(args):
+    from .hpstart import write_hpstart
+    pst = read_pst(args.pstfile)
+    manifest = None if args.no_manifest else Manifest('hpstart', args._argv)
+    if manifest is not None:
+        for path, role in ((args.pstfile, 'control file'), (args.template, 'hp template'),
+                           (args.res, 'residuals'), (args.obs_csv, 'observation ensemble'),
+                           (args.par, 'parameter values')):
+            if path:
+                manifest.add_source(path, role=role)
+    counts = write_hpstart(pst, args.template, args.out, res=args.res,
+                           obs_csv=args.obs_csv, real=args.real, par=args.par)
+    print(f'written {args.out}: {counts["npar"]} parameters, {counts["nobs"]} observations')
+    if manifest is not None:
+        manifest.set_output(args.out, **counts)
+        manifest.add(realization=args.real)
+        print(f'manifest written to {manifest.write()}')
+
+
 def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
     # legacy form: makePst.py out.pst mode --add_par_xls ...  (no subcommand)
-    if argv and argv[0] not in ('build', 'dump', 'update', 'parrep', 'init', 'validate', 'diff', 'tempchek', 'inschek',
-                                '-h', '--help', '-v', '--version'):
+    if argv and argv[0] not in ('build', 'dump', 'update', 'parrep', 'init', 'validate', 'provenance', 'log', 'bundle',
+                                'diff', 'tempchek', 'inschek', 'hpstart', '-h', '--help', '-v', '--version'):
         argv.insert(0, 'build')
 
     ap = argparse.ArgumentParser(prog='makepst', description=__doc__)
@@ -500,6 +578,17 @@ def main(argv=None):
     rf.add_argument('--v2', action='store_true', help='write a PEST++ version-2 file')
     rf.add_argument('--v1', action='store_true', help='write the classic format (default: same as the input)')
 
+    h = sub.add_parser('hpstart', help='update a PEST_HP .hp file from residual or IES observation values')
+    h.add_argument('pstfile', help='control file defining observation and parameter order')
+    h.add_argument('out', help='new .hp file (must differ from the template)')
+    h.add_argument('--template', required=True, help='existing .hp with matching order; instruction metadata is preserved')
+    hs = h.add_mutually_exclusive_group(required=True)
+    hs.add_argument('--res', help='PEST .res/.rei file providing MODELLED values')
+    hs.add_argument('--obs_csv', help='PESTPP-IES case.N.obs.csv providing modeled values')
+    h.add_argument('--real', help='IES realization name, or best (default base)')
+    h.add_argument('--par', help='optional .par or IES parameter file to replace template parameter values')
+    h.add_argument('--no_manifest', action='store_true', help="don't write <out>.manifest.json")
+
     v = sub.add_parser('validate', help='pestchek-style checks on a control file or a workbook')
     v.add_argument('target', help='control file, or a workbook with a BUILD sheet')
     v.add_argument('--outputs', action='store_true',
@@ -508,6 +597,31 @@ def main(argv=None):
                                                      '(default: the folder of the target)')
     v.add_argument('--strict', action='store_true', help='exit 1 on warnings as well as errors')
     v.add_argument('--quiet', action='store_true', help='hide informational lines')
+
+    q = sub.add_parser('provenance', help='compare files against a saved manifest')
+    q.add_argument('target', help='manifest path, or output path with a .manifest.json sidecar')
+
+    g = sub.add_parser('log', help='ledger of every manifest under a folder: what produced which file from what')
+    g.add_argument('folder', nargs='*', help='folders (or manifest files) to search; default the current one')
+    g.add_argument('--file', action='append', default=[], metavar='NAME',
+                   help='only entries whose output or sources include this file name, path or sha256 prefix')
+    g.add_argument('--command', action='append', default=[], metavar='CMD', help='only this command (repeatable)')
+    g.add_argument('--last', type=int, metavar='N', help='only the N most recent entries')
+    g.add_argument('--check', action='store_true', help='also compare every recorded hash with the file on disk')
+    g.add_argument('--no_recursive', action='store_true', help='do not descend into subfolders')
+
+    b = sub.add_parser('bundle', help='zip a run for reproduction or review: control file, manifest, templates, '
+                                      'instruction files, model inputs, command files')
+    b.add_argument('pstfile', help='control file')
+    b.add_argument('out', nargs='?', help='zip file to write (default: the control file name with .zip)')
+    b.add_argument('--sources', action='store_true', help="also the manifest's sources (the workbook, .par, ...)")
+    b.add_argument('--outputs', action='store_true', help='also the model output files the instruction files read')
+    b.add_argument('--extra', action='append', default=[], metavar='GLOB',
+                   help='more files, relative to the run directory (repeatable; ** allowed)')
+    b.add_argument('--base_dir', metavar='DIR', help='the directory PEST runs in (default: guessed as validate does)')
+    b.add_argument('--list', action='store_true', help='show what would be bundled, write nothing')
+    b.add_argument('--strict', action='store_true', help='exit 1 when a referenced file is missing')
+    b.add_argument('--no_manifest', action='store_true', help="don't write <zip>.manifest.json")
 
     t = sub.add_parser('tempchek', help='check a template file, or write model input files from parameter values (like TEMPCHEK)')
     t.add_argument('target', help='template file, or a control file / workbook (all of its templates)')
@@ -552,6 +666,7 @@ def main(argv=None):
     u.add_argument('--overwrite_formulas', action='store_true',
                    help='also write into cells that currently hold formulas (default: leave them alone)')
     u.add_argument('--out', help='save to this file instead of in place')
+    u.add_argument('--dry_run', action='store_true', help='preview matches and skipped cells without writing files')
     u.add_argument('--backend', choices=['xlwings', 'openpyxl'], help='default: xlwings if installed')
     u.add_argument('--no_manifest', action='store_true', help="don't write <workbook>.manifest.json")
     u.add_argument('--no_phi', action='store_true', help="don't write the PHI / PHI_IES sheets with --res / --obs_csv")
@@ -559,7 +674,9 @@ def main(argv=None):
     args = ap.parse_args(argv)
     args._argv = argv                 # the command line as given, for the manifest
     {'build': build, 'dump': dump, 'update': update, 'parrep': parrep, 'init': init,
-     'validate': validate, 'diff': diff, 'tempchek': tempchek, 'inschek': inschek}[args.cmd](args)
+     'validate': validate, 'provenance': provenance, 'log': log, 'bundle': bundle, 'diff': diff,
+     'tempchek': tempchek, 'inschek': inschek,
+     'hpstart': hpstart}[args.cmd](args)
 
 
 if __name__ == '__main__':
