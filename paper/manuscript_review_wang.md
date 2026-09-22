@@ -10,7 +10,7 @@ Suggested central message: makePst complements pyEMU by giving project teams a s
 
 ## Coverage of Wang's points
 
-Line numbers below refer to the unchanged [current manuscript](https://github.com/ougx/makePst/blob/e86c11c/paper/manuscript.md).
+Line numbers below refer to Michael's [original manuscript at the reviewed commit](https://github.com/ougx/makePst/blob/e86c11c/paper/manuscript.md).
 
 | Point from practical use | Current coverage | Assessment and proposed improvement |
 |---|---|---|
@@ -27,9 +27,9 @@ Line numbers below refer to the unchanged [current manuscript](https://github.co
 3. **Keep the current demonstration and Table 1.** They already supply a concrete example of many sheets, weighting formulas, and returned results. No new timings, counts, calibration outcomes, or claims about Wang's project are needed for this revision.
 4. **Refine the scope paragraphs.** Correct the cached-value warning claim and describe a practical pyEMU handoff with a concise compatibility qualification.
 5. **Replace the first significance paragraph with two short paragraphs.** Lead with the shared review experience, then explain the reproducibility benefit. State that the workbook organizes calibration tables and settings while external model, template, and instruction files remain linked separately.
-6. **Review length before submission.** The local counting method gives 2,105 body words for the current manuscript and 2,191 for the draft (+86). Full-file counts are 2,447 and 2,533, respectively, including front matter, references, and the figure caption. These are editorial counts, not a verified journal calculation. The existing plan targets a shorter body; if necessary, trim repeated command descriptions rather than removing the new practical explanation.
+6. **Review length before submission.** The local counting method gives 2,105 body words for the original manuscript and 2,191 for the revised manuscript (+86). Full-file counts are 2,447 and 2,533, respectively, including front matter, references, and the figure caption. These are editorial counts, not a verified journal calculation. The existing plan targets a shorter body; if necessary, trim repeated command descriptions rather than removing the new practical explanation.
 
-A complete candidate incorporating these changes is saved as [manuscript_wang_draft.md](manuscript_wang_draft.md). The existing `manuscript.md` and `plan.md` remain unchanged. The title, author list, impact statement, demonstration, table, references, and figure caption are retained.
+The revisions are incorporated directly into [manuscript.md](manuscript.md), using the original manuscript filename so the pull request shows the changes in place. The separate draft file has been removed; `plan.md` remains unchanged. The title, author list, impact statement, demonstration, table, references, and figure caption are retained.
 
 ## Proposed replacement wording
 
@@ -59,7 +59,7 @@ The same workflow supports reproducibility. A workbook and its build command can
 
 ## Technical checks behind the wording
 
-- **Formula handling:** [makepst/excel.py](https://github.com/ougx/makePst/blob/e86c11c/makepst/excel.py#L21) reads workbook tables and checks for missing cached formula results. Its warning explicitly states that existing cached values may be stale and their freshness cannot be determined. The current manuscript's statement that `build` warns when values are missing *or stale* is too broad. The candidate now distinguishes missing-value warnings from undetectable stale values.
+- **Formula handling:** [makepst/excel.py](https://github.com/ougx/makePst/blob/e86c11c/makepst/excel.py#L21) reads workbook tables and checks for missing cached formula results. Its warning explicitly states that existing cached values may be stale and their freshness cannot be determined. The original manuscript's statement that `build` warns when values are missing *or stale* is too broad. The candidate now distinguishes missing-value warnings from undetectable stale values.
 - **Formula preservation and recalculation:** [README.md](https://github.com/ougx/makePst/blob/e86c11c/README.md#L209) documents default formula protection; its backend discussion at line 235 distinguishes Excel/xlwings recalculation from openpyxl updates. The candidate does not claim that preserving formula text guarantees current calculated values.
 - **Centralized settings and source context:** [README.md](https://github.com/ougx/makePst/blob/e86c11c/README.md#L162) documents control variables, parameter/observation fields, optional helper columns, input/output mappings, and PEST++ option tables. Source references and notes are proposed workbook content, not a newly claimed makePst data-import or data-quality feature. A workbook hash identifies a file; it does not validate the scientific origin of its observations.
 - **Fair positioning of pyEMU:** The [official pyEMU repository](https://github.com/pypest/pyemu#what-is-pyemu) explicitly lists control-file manipulation, observation processing, and observation reweighting. The distinctive practical emphasis here is workbook-centered review and exchange, not a claim that pyEMU cannot manage weights or tables.
@@ -78,4 +78,4 @@ Two nearby issues deserve a separate factual check before submission:
 - The earlier [paper/plan.md](https://github.com/ougx/makePst/blob/e86c11c/paper/plan.md) still lists version-2 external tables as unsupported, whereas the current manuscript and repository documentation describe support. Use the current manuscript and implementation for this revision rather than copying limitations from that older outline.
 - [paper/reproduce.py](https://github.com/ougx/makePst/blob/e86c11c/paper/reproduce.py#L60) creates synthetic parameter and residual files for its openpyxl update demonstration (parameter values multiplied by 1.01 and residuals fixed at -0.5). The authors should distinguish that reproducible transfer check from the separately reported production-workbook update. The proposed draft retains the existing numerical claims and does not recast synthetic data as observed calibration results.
 
-These two files are proposals for selecting and refining changes before incorporating them into `manuscript.md`. The existing manuscript remains unchanged so the authors can review the proposed wording separately.
+The proposed wording is now incorporated into `manuscript.md` for review through the pull request. This companion review records the rationale and outstanding factual checks; Michael's original text remains available in Git history.
