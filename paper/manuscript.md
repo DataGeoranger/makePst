@@ -36,17 +36,17 @@ Two design decisions underpin auditability. Commands such as `build`, `dump`, an
 
 **`build`** reads Excel worksheets or CSV files and writes a PEST-family control file. Parameter and observation tables may span worksheets, alongside control variables, PEST++ options, and model input/output mappings. Counts are calculated automatically; tied parameters, regularization equations generated from preferred values, and PEST_HP keywords are supported.
 
-Input tables require recognized column headers in the first row (Table 1); headers are case-insensitive. Data-sheet names are user-selected and mapped through options such as `--add_par_xls calibration.xlsx,PAR_HK`. The workbook shortcut reads these mappings from a sheet named `BUILD`. Unrecognized helper columns remain in the workbook and are excluded from the control file.
+Input tables follow the layouts in Table 1, with headers in the first row. Columns are identified by case-insensitive headers or by position, depending on the table. Data-sheet names are user-selected and mapped through options such as `--add_par_xls calibration.xlsx,PAR_HK`. The workbook shortcut reads these mappings from a sheet named `BUILD`. Unrecognized helper columns in parameter and observation tables remain in the workbook and are excluded from the control file.
 
 **Table 1.** Input-table roles and core fields. Worksheet and CSV names are examples, not required names. Optional rows are used only when the corresponding definitions are supplied. The [versioned input-schema documentation](https://github.com/ougx/makePst/blob/v0.3.0/README.md#build--tables--pst) describes additional fields and options.
 
 | Table role | Example worksheet / CSV | Core fields or content |
 |---|---|---|
-| Control settings | `CONTROL` / `control.csv` | `NAME`, `VALUE` within the first four columns; the starter uses `LINE`, `NAME`, `DEFAULT`, `VALUE`. Blank values use built-in defaults where defined. |
+| Control settings | `CONTROL` / `control.csv` | Names in column 2, values in column 4; the starter uses `LINE`, `NAME`, `DEFAULT`, `VALUE`. Blank values use built-in defaults where defined. |
 | Parameter groups | `PARGP` / `pargp.csv` | `PARGPNME`, `INCTYP`, `DERINC`, `DERINCLB`, `FORCEN`, `DERINCMUL`, `DERMTHD` |
 | Parameters | `PAR` or `PAR_HK` / `par.csv` | `PARNME`, `PARTRANS`, `PARCHGLIM`, `PARVAL1`, `PARLBND`, `PARUBND`, `PARGP`, `SCALE`, `OFFSET`, `DERCOM`; optional `TIETO`, `PRIOR`, and `WEIGHT` |
 | Observations | `OBS` or `OBS_HEAD` / `obs.csv` | `OBSNME`, `OBSVAL`, `WEIGHT`, `OBGNME` |
-| Model interface | `IO` / `io.csv` | `TYPE` (`cmd`, `tpl`, or `ins`), `IN`, `OUT`, for model commands and template/instruction file pairs |
+| Model interface | `IO` / `io.csv` | First three columns: type (`cmd`, `tpl`, or `ins`), input/command, output; conventionally headed `TYPE`, `IN`, `OUT` |
 | PEST++ options (optional) | `PP` / `pp.csv` | First two columns: option name and value, conventionally headed `PP_VAR` and `VAL` |
 | Prior information (optional) | `PRIOR` / `prior.csv` | `PINME`, `EQ`, `WEIGHT`, `OBGNME` |
 | Parameter ties (optional) | `TIED` / `tied.csv` | First two columns: parameter name and the name of its target; an alternative to `TIETO` in the parameter table |
